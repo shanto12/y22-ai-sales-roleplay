@@ -60,10 +60,12 @@ function reducer(s: State, a: Action): State {
 }
 
 /**
- * High-level state machine for the roleplay call. Wires the synthetic engine
- * for the demo path; in live mode this is replaced by the WebSocket session.
+ * High-level state machine for the roleplay call. The synthetic engine drives
+ * the visual demo timeline (score tiles, transcript, whisper) in every mode.
+ * In a future iteration the WebSocket session in voice-session.ts replaces it
+ * for end-to-end live audio + transcript capture from xAI Grok Voice.
  */
-export function useCallMachine(synthetic: boolean) {
+export function useCallMachine(_synthetic: boolean) {
   const [state, dispatch] = useReducer(reducer, undefined, initial)
   const engine = useRef<SyntheticEngine | null>(null)
 
@@ -75,28 +77,22 @@ export function useCallMachine(synthetic: boolean) {
 
   useEffect(() => {
     if (state.call !== 'live') return
-    if (synthetic) {
-      engine.current = new SyntheticEngine({
-        onScore:       (id, score) => dispatch({ type: 'score_tile', id, score }),
-        onTranscript:  (line)      => dispatch({ type: 'transcript', line }),
-        onWhisper:     (w)         => dispatch({ type: 'whisper', whisper: w }),
-        onCallEnd:     (final)     => dispatch({ type: 'final_scores', scores: final }),
-      })
-      engine.current.start()
-      // Toggle who's speaking for the waveform, every 2.5s.
-      const id = setInterval(() => {
-        dispatch({ type: 'voice_activity', user: Math.random() > 0.5, ai: Math.random() > 0.4 })
-      }, 1100)
-      return () => {
-        engine.current?.stop()
-        engine.current = null
-        clearInterval(id)
-      }
+    engine.current = new SyntheticEngine({
+      onScore:       (id, score) => dispatch({ type: 'score_tile', id, score }),
+      onTranscript:  (line)      => dispatch({ type: 'transcript', line }),
+      onWhisper:     (w)         => dispatch({ type: 'whisper', whisper: w }),
+      onCallEnd:     (final)     => dispatch({ type: 'final_scores', scores: final }),
+    })
+    engine.current.start()
+    const id = setInterval(() => {
+      dispatch({ type: 'voice_activity', user: Math.random() > 0.5, ai: Math.random() > 0.4 })
+    }, 1100)
+    return () => {
+      engine.current?.stop()
+      engine.current = null
+      clearInterval(id)
     }
-    // Live path lives in voice-session.ts — wire-up deferred to keep this module
-    // synchronous and testable. The synthetic engine exercises the same dispatch path.
-    return
-  }, [state.call, synthetic])
+  }, [state.call])
 
   return {
     state,
@@ -104,10 +100,7 @@ export function useCallMachine(synthetic: boolean) {
     start:         () => dispatch({ type: 'start' }),
     end:           () => {
       dispatch({ type: 'end' })
-      // synth -> immediate finalize
-      if (synthetic) {
-        setTimeout(() => engine.current?.endNow(), 600)
-      }
+      setTimeout(() => engine.current?.endNow(), 600)
     },
     reset:         () => dispatch({ type: 'reset' }),
     forceState:    (s: CallState) => dispatch({ type: 'force_state', call: s }),

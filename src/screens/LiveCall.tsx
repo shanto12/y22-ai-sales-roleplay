@@ -23,28 +23,33 @@ export function LiveCall({
   const [whisperState, setWhisperState] = useState<'visible' | 'used' | 'dismissed' | 'held'>('visible')
   const [history, setHistory] = useState<string[]>(WHISPER_HISTORY)
   const [lastWhisperText, setLastWhisperText] = useState<string | undefined>(undefined)
+  const [resolvedText, setResolvedText] = useState<string | undefined>(undefined)
 
-  // Reset whisper interaction state when a new whisper text arrives.
-  // Done during render via a state-setter call on identity change — React's
-  // recommended pattern for deriving state from props with local interaction.
-  if (whisper?.text !== lastWhisperText) {
-    setLastWhisperText(whisper?.text)
+  // Reset whisper interaction state ONLY when a brand-new whisper text arrives.
+  // (Clearing to null shouldn't reset the resolved state — that would flash the
+  // user's "Used / Dismissed / Held" acknowledgement back to "visible" briefly.)
+  if (whisper && whisper.text !== lastWhisperText) {
+    setLastWhisperText(whisper.text)
     setWhisperState('visible')
+    setResolvedText(undefined)
   }
 
   const handleUse = () => {
     if (!whisper) return
     setWhisperState('used')
+    setResolvedText(whisper.text)
     setHistory((h) => [`${elapsed} — Used: ${whisper.text}`, ...h].slice(0, 6))
   }
   const handleDismiss = () => {
     if (!whisper) return
     setWhisperState('dismissed')
+    setResolvedText(whisper.text)
     setHistory((h) => [`${elapsed} — Dismissed: ${whisper.text}`, ...h].slice(0, 6))
   }
   const handleHold = () => {
     if (!whisper) return
     setWhisperState('held')
+    setResolvedText(whisper.text)
     setHistory((h) => [`${elapsed} — Held for later: ${whisper.text}`, ...h].slice(0, 6))
   }
 
@@ -148,7 +153,7 @@ export function LiveCall({
                   </div>
                 </div>
               </div>
-            ) : whisper ? (
+            ) : whisperState !== 'visible' && resolvedText ? (
               <div className="whisper-resolved" data-state={whisperState}>
                 <div className="resolved-label">
                   {whisperState === 'used' && '✓ Whisper used — keep going'}

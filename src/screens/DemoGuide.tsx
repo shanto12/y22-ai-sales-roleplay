@@ -1,21 +1,43 @@
+import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import type { HealthResponse } from '../types.ts'
 
-export function DemoGuide({ health }: { health: HealthResponse }) {
+const SECTIONS = [
+  { id: 'system-status', label: 'System status' },
+  { id: 'walkthrough', label: 'Recommended walkthrough' },
+  { id: 'cheatsheet', label: 'Configuration cheatsheet' },
+  { id: 'shortcuts', label: 'Talk-track shortcuts' },
+] as const
+
+export function DemoGuide({ health, onOpenHelp }: { health: HealthResponse; onOpenHelp?: () => void }) {
   const voice = health.capabilities.voice.live
   const score = health.capabilities.scoring.live
   const persona = health.capabilities.persona.live
   const synth = health.syntheticReady
 
+  const [activeSection, setActiveSection] = useState<string>('system-status')
+
+  const goTo = (id: string) => {
+    setActiveSection(id)
+    const el = document.getElementById(id)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
-    <div style={{ display: 'flex', minHeight: 'calc(100vh - 49px)' }}>
-      <aside className="guide-side">
+    <div className="demo-guide-shell">
+      <aside className="guide-side" aria-label="Demo guide navigation">
         <div className="label">On this page</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 18 }}>
-          <div className="guide-item active"><span className="num">01</span> System status</div>
-          <div className="guide-item"><span className="num">02</span> Recommended walkthrough</div>
-          <div className="guide-item"><span className="num">03</span> Configuration cheatsheet</div>
-          <div className="guide-item"><span className="num">04</span> Talk-track shortcuts</div>
+          {SECTIONS.map((s, i) => (
+            <button
+              key={s.id}
+              className={`guide-item ${activeSection === s.id ? 'active' : ''}`}
+              onClick={() => goTo(s.id)}
+              aria-current={activeSection === s.id ? 'true' : undefined}
+            >
+              <span className="num">0{i + 1}</span> {s.label}
+            </button>
+          ))}
         </div>
         <div style={{ padding: 12, border: '1px solid var(--hairline)', borderRadius: 6, fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.5 }}>
           <div style={{ color: 'var(--green)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, marginBottom: 6 }}>// for recruiters</div>
@@ -23,13 +45,13 @@ export function DemoGuide({ health }: { health: HealthResponse }) {
         </div>
       </aside>
 
-      <main style={{ flex: 1, padding: '24px 32px', maxWidth: 880 }}>
+      <main className="guide-main">
         <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 4 }}>Demo Guide</div>
         <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 28 }}>
           Built so a recruiter can press play and see what good looks like. No login, no setup, no API key needed for the canned path.
         </div>
 
-        <section style={{ marginBottom: 32 }}>
+        <section id="system-status" style={{ marginBottom: 32 }}>
           <div className="row-head"><div className="title"><span className="num">01</span> System status</div></div>
           <div className="panel">
             <HealthRow
@@ -59,15 +81,15 @@ export function DemoGuide({ health }: { health: HealthResponse }) {
           </div>
         </section>
 
-        <section style={{ marginBottom: 32 }}>
+        <section id="walkthrough" style={{ marginBottom: 32 }}>
           <div className="row-head"><div className="title"><span className="num">02</span> Recommended walkthrough</div></div>
           <ol style={{ paddingLeft: 0, listStyle: 'none', margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
               { t: 'Pick the CFO preset', s: 'Hardest persona. Shows objection handling, not happy-path discovery.' },
-              { t: 'Click Start Roleplay', s: 'Mic calibrates for 1.2s, then live waveform engages.' },
-              { t: 'Watch the 6-tile scorecard fill in', s: 'Each tile updates every 8–12s with a one-line LLM-judge rationale.' },
-              { t: 'Reframe the “we already have a vendor” objection', s: 'This is the moment the demo turns. Whisper coaches you in real time.' },
-              { t: 'End call → land on Scorecard', s: 'See the “moment the deal turned” clip + 3 coaching bullets.' },
+              { t: 'Click Start Roleplay (or press Enter)', s: 'Mic calibrates for 1.2s, then live waveform engages.' },
+              { t: 'Watch the 6-tile scorecard fill in', s: 'Each tile updates with a one-line LLM-judge rationale.' },
+              { t: 'Use, dismiss, or hold the Whisper coaching', s: 'The pill that lights amber is your real-time copilot.' },
+              { t: 'End call → land on Scorecard', s: 'Press Esc, or click End call. See the moment the deal turned and 3 coaching bullets.' },
               { t: 'Open Prompt Lab', s: 'Show that personas are versioned + evaluated, not vibe-prompted.' },
             ].map((s, i) => (
               <li key={i} style={{ display: 'flex', gap: 14, padding: 12, border: '1px solid var(--hairline)', borderRadius: 6, background: 'var(--card)' }}>
@@ -81,7 +103,7 @@ export function DemoGuide({ health }: { health: HealthResponse }) {
           </ol>
         </section>
 
-        <section style={{ marginBottom: 32 }}>
+        <section id="cheatsheet" style={{ marginBottom: 32 }}>
           <div className="row-head"><div className="title"><span className="num">03</span> Configuration cheatsheet</div></div>
           <pre className="cheatsheet">
 {`# .env.local
@@ -91,13 +113,19 @@ export function DemoGuide({ health }: { health: HealthResponse }) {
 `}<span className="var">SCORING_MODEL</span>={`          `}<span className="val">grok-3</span>{`
 
 `}<span className="cmt">{`# Optional`}</span>{`
-`}<span className="var">XAI_API_BASE_URL</span>={`     `}<span className="val">https://api.x.ai/v1</span>{`
-`}<span className="var">DEMO_MODE</span>={`              `}<span className="val">false</span>{`   `}<span className="cmt">{`# force canned`}</span>
+`}<span className="var">XAI_API_BASE_URL</span>={`     `}<span className="val">https://api.x.ai/v1</span>
           </pre>
         </section>
 
-        <section>
-          <div className="row-head"><div className="title"><span className="num">04</span> Talk-track shortcuts</div></div>
+        <section id="shortcuts" style={{ marginBottom: 32 }}>
+          <div className="row-head">
+            <div className="title"><span className="num">04</span> Talk-track shortcuts</div>
+            {onOpenHelp && (
+              <button className="mono-mute" style={{ fontSize: 11, background: 'none', border: 'none', color: 'var(--green)', cursor: 'pointer' }} onClick={onOpenHelp}>
+                see all keyboard shortcuts →
+              </button>
+            )}
+          </div>
           <div className="shortcuts">
             <div className="track">
               <div className="dur">90s</div>

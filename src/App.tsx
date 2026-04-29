@@ -6,9 +6,11 @@ import { LiveCall } from './screens/LiveCall.tsx'
 import { Scorecard } from './screens/Scorecard.tsx'
 import { PromptLab } from './screens/PromptLab.tsx'
 import { DemoGuide } from './screens/DemoGuide.tsx'
+import { KeyboardHelp } from './components/shared/KeyboardHelp.tsx'
 import { useHealth } from './hooks/useHealth.ts'
 import { useDeepLink } from './hooks/useDeepLink.ts'
 import { useCallMachine } from './hooks/useCallMachine.ts'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.ts'
 import { PRESETS } from './data/presets.ts'
 import { SYNTHETIC_FINAL } from './lib/synthetic-engine.ts'
 import type { AppTab, CustomConfig, Persona } from './types.ts'
@@ -21,6 +23,7 @@ function App() {
   const [tab, setTab] = useState<AppTab>(deepLink.tab ?? 'roleplay')
   const [presetId, setPresetId] = useState<string>('cfo')
   const [custom, setCustom] = useState<CustomConfig>({ industry: 'fintech', title: 'cfo', difficulty: 'hard', objection: 'price' })
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const { state, selectPersona, start, end, reset, forceState } = useCallMachine(synthetic)
 
@@ -39,8 +42,7 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Clock for the live-call timer. The interval callback updates state from
-  // outside React (timer fires asynchronously), so setState there is allowed.
+  // Live-call timer (interval callback runs outside the render path).
   const [elapsed, setElapsed] = useState('00:00')
   useEffect(() => {
     if (state.call !== 'live') return
@@ -55,12 +57,26 @@ function App() {
     }
   }, [state.call])
 
+  // Global keyboard shortcuts. Each handler is gated by the current screen
+  // so e.g. Esc only triggers End-call when actually in a live call.
+  const onTabKey = (n: 1 | 2 | 3) => {
+    if (n === 1) setTab('roleplay')
+    if (n === 2) setTab('prompt')
+    if (n === 3) setTab('guide')
+  }
+  useKeyboardShortcuts({
+    onHelp: () => setHelpOpen(true),
+    onTab: onTabKey,
+    onStart: tab === 'roleplay' && state.call === 'idle' ? start : undefined,
+    onEnd: tab === 'roleplay' && state.call === 'live' ? end : undefined,
+  })
+
   return (
     <div className="app">
       {synthetic && <SyntheticBanner />}
-      <TopChrome tab={tab} setTab={setTab} health={health} />
+      <TopChrome tab={tab} setTab={setTab} health={health} onOpenHelp={() => setHelpOpen(true)} />
 
-      <div className="app-body">
+      <main className="app-body" id="main-content">
         {tab === 'roleplay' && (state.call === 'idle') && (
           <Configurator
             selectedPreset={presetId}
@@ -95,8 +111,10 @@ function App() {
         )}
 
         {tab === 'prompt' && <PromptLab />}
-        {tab === 'guide' && <DemoGuide health={health} />}
-      </div>
+        {tab === 'guide' && <DemoGuide health={health} onOpenHelp={() => setHelpOpen(true)} />}
+      </main>
+
+      <KeyboardHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   )
 }

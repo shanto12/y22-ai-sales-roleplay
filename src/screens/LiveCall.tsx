@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { PhoneOff } from 'lucide-react'
 import { Waveform } from '../components/shared/Waveform.tsx'
 import { ScoreTile } from '../components/shared/ScoreTile.tsx'
@@ -19,8 +20,36 @@ export function LiveCall({
   onEnd: () => void
   elapsed: string
 }) {
+  const [whisperState, setWhisperState] = useState<'visible' | 'used' | 'dismissed' | 'held'>('visible')
+  const [history, setHistory] = useState<string[]>(WHISPER_HISTORY)
+  const [lastWhisperText, setLastWhisperText] = useState<string | undefined>(undefined)
+
+  // Reset whisper interaction state when a new whisper text arrives.
+  // Done during render via a state-setter call on identity change — React's
+  // recommended pattern for deriving state from props with local interaction.
+  if (whisper?.text !== lastWhisperText) {
+    setLastWhisperText(whisper?.text)
+    setWhisperState('visible')
+  }
+
+  const handleUse = () => {
+    if (!whisper) return
+    setWhisperState('used')
+    setHistory((h) => [`${elapsed} — Used: ${whisper.text}`, ...h].slice(0, 6))
+  }
+  const handleDismiss = () => {
+    if (!whisper) return
+    setWhisperState('dismissed')
+    setHistory((h) => [`${elapsed} — Dismissed: ${whisper.text}`, ...h].slice(0, 6))
+  }
+  const handleHold = () => {
+    if (!whisper) return
+    setWhisperState('held')
+    setHistory((h) => [`${elapsed} — Held for later: ${whisper.text}`, ...h].slice(0, 6))
+  }
+
   return (
-    <div className="panel" style={{ position: 'relative', margin: 16, overflow: 'hidden' }}>
+    <div className="panel" style={{ position: 'relative', margin: 16, overflow: 'hidden' }} role="region" aria-label="Live roleplay call">
       {calibrating && <CalibratingOverlay />}
 
       <div className="call-header">
@@ -33,8 +62,8 @@ export function LiveCall({
             Persona profile: {persona.profile}
           </div>
         </div>
-        <button className="btn btn-coral" onClick={onEnd}>
-          <PhoneOff size={14} /> End call
+        <button className="btn btn-coral" onClick={onEnd} aria-label="End call (Esc)" data-testid="end-call">
+          <PhoneOff size={14} /> End call <span className="kbd" style={{ marginLeft: 6 }}>Esc</span>
         </button>
       </div>
 
@@ -63,7 +92,7 @@ export function LiveCall({
           <div className="title"><span className="num">01</span> Behavior Scorecard · live</div>
           <div className="mono-mute" style={{ fontSize: 11 }}>updated 0.4s ago · 6 of 6 behaviors</div>
         </div>
-        <div className="tiles-grid">
+        <div className="tiles-grid" aria-live="polite">
           {BEHAVIORS.map((b) => <ScoreTile key={b.id} b={b} score={scores[b.id]} />)}
         </div>
       </div>
@@ -72,7 +101,7 @@ export function LiveCall({
         <div className="call-col">
           <div className="col-head">
             <span>
-              <span className="num" style={{ display: 'inline-grid', placeItems: 'center', width: 18, height: 18, border: '1px solid var(--hairline)', borderRadius: 4, background: 'var(--card)', color: 'var(--text-dim)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace', marginRight: 8 }}>02</span>
+              <span className="num">02</span>
               Live transcript
             </span>
             <span className="mono-mute" style={{ fontSize: 10 }}>auto-scroll on</span>
@@ -97,34 +126,42 @@ export function LiveCall({
         <div className="call-col">
           <div className="col-head">
             <span>
-              <span className="num" style={{ display: 'inline-grid', placeItems: 'center', width: 18, height: 18, border: '1px solid var(--hairline)', borderRadius: 4, background: 'var(--card)', color: 'var(--text-dim)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace', marginRight: 8 }}>03</span>
+              <span className="num">03</span>
               Whisper coaching
             </span>
-            <span className="mono-mute" style={{ fontSize: 10 }}>2 used · 1 dismissed</span>
+            <span className="mono-mute" style={{ fontSize: 10 }}>{history.length} entries</span>
           </div>
           <div className="whisper">
-            {whisper ? (
-              <div className="whisper-card">
+            {whisper && whisperState === 'visible' ? (
+              <div className="whisper-card whisper-enter" key={whisper.text}>
                 <div className="dot" />
                 <div className="body">
                   <div className="label">MID-CALL TIP · {elapsed}</div>
                   <div className="text">{whisper.text}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-mute)', marginTop: 6, fontFamily: 'JetBrains Mono, monospace' }}>// {whisper.reason}</div>
                   <div className="actions">
-                    <button className="pill-btn use">Use</button>
-                    <button className="pill-btn">Dismiss</button>
-                    <button className="pill-btn" style={{ marginLeft: 'auto' }}>Hold <span className="kbd" style={{ marginLeft: 4 }}>W</span></button>
+                    <button className="pill-btn use" onClick={handleUse} data-testid="whisper-use">Use</button>
+                    <button className="pill-btn" onClick={handleDismiss}>Dismiss</button>
+                    <button className="pill-btn" style={{ marginLeft: 'auto' }} onClick={handleHold}>
+                      Hold <span className="kbd" style={{ marginLeft: 4 }}>W</span>
+                    </button>
                   </div>
                 </div>
               </div>
-            ) : (
-              <div style={{ display: 'grid', placeItems: 'center', flex: 1, color: 'var(--text-mute)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', border: '1px dashed var(--hairline-2)', borderRadius: 6, padding: 20 }}>
-                no whisper queued — keep going
+            ) : whisper ? (
+              <div className="whisper-resolved" data-state={whisperState}>
+                <div className="resolved-label">
+                  {whisperState === 'used' && '✓ Whisper used — keep going'}
+                  {whisperState === 'dismissed' && '✕ Whisper dismissed'}
+                  {whisperState === 'held' && '⏸ Held — will surface again at the next pause'}
+                </div>
               </div>
+            ) : (
+              <div className="whisper-empty">no whisper queued — keep going</div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 'auto' }}>
-              <div className="label" style={{ marginBottom: 0 }}>Earlier this call</div>
-              {WHISPER_HISTORY.map((h, i) => (
+              <div className="label" style={{ marginBottom: 0 }}>This call</div>
+              {history.map((h, i) => (
                 <div key={i} className="whisper-history-item">{h}</div>
               ))}
             </div>

@@ -96,6 +96,7 @@ function App() {
             transcript={state.transcript}
             whisper={state.whisper}
             calibrating={state.call === 'calibrating'}
+            scoring={state.call === 'scoring'}
             onEnd={() => end('user')}
             elapsed={elapsed}
             voiceMode={state.voiceMode}

@@ -1,7 +1,7 @@
 import { useReducer, useEffect, useRef, useCallback } from 'react'
 import { SyntheticEngine, SYNTHETIC_FINAL } from '../lib/synthetic-engine.ts'
 import { VoiceSession } from '../lib/voice-session.ts'
-import { mintToken } from '../lib/api.ts'
+import { mintToken, streamScore } from '../lib/api.ts'
 import { buildPersonaSystemPrompt } from '../data/persona-builder.ts'
 import type { BehaviorId, CallState, CustomConfig, Persona, ScoreMap, Score, TranscriptLine, WhisperPrompt } from '../types.ts'
 import { BEHAVIORS } from '../data/behaviors.ts'
@@ -101,14 +101,52 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
   // Sync the ref via an effect so the rule-of-hooks compiler stays happy.
   useEffect(() => { customCfgRef.current = opts?.customConfig }, [opts?.customConfig])
 
+  // Latest known state (for use inside the end callback without recreating it).
+  const stateRef = useRef(state)
+  useEffect(() => { stateRef.current = state }, [state])
+
   // End-call helper — stable reference so the auto-end timer can call it.
-  // Dispatch the final-scores action directly so we never depend on the
-  // synthetic engine still being mounted (the live useEffect's cleanup tears
-  // it down as soon as state.call leaves 'live').
+  //
+  // Flow:
+  //   1. Stop the live voice session (closes WS + mic).
+  //   2. Dispatch 'end' → call='scoring' (LiveCall stays visible with overlay).
+  //   3. POST the captured transcript to /api/score and stream tile updates
+  //      back into the reducer. Each tile re-fills with the real Grok-3 score.
+  //   4. When the final result arrives → dispatch 'final_scores' → call='done'
+  //      → Scorecard renders with the real grade.
+  //   5. On any error / empty transcript, fall back to SYNTHETIC_FINAL so the
+  //      user never lands on a blank scorecard.
   const end = useCallback((_reason: 'user' | 'auto' | 'error' = 'user') => {
     voice.current?.stop()
     voice.current = null
-    dispatch({ type: 'final_scores', scores: SYNTHETIC_FINAL })
+    dispatch({ type: 'end' })
+
+    const cur = stateRef.current
+    const transcript = cur.transcript
+    const persona = cur.persona
+    const usingLive = cur.voiceMode === 'live' && transcript.length > 0
+
+    if (!usingLive) {
+      // No real conversation happened — just resolve to the canned scorecard.
+      // Keep a small delay so the scoring state is briefly visible (UX polish).
+      setTimeout(() => dispatch({ type: 'final_scores', scores: SYNTHETIC_FINAL }), 700)
+      return
+    }
+
+    streamScore(
+      transcript,
+      {
+        name: persona?.full_name ?? 'Buyer',
+        title: persona?.title ?? '—',
+        difficulty: persona?.difficulty ?? 'hard',
+      },
+      true,
+      {
+        tile: (id, score) => dispatch({ type: 'score_tile', id: id as BehaviorId, score }),
+        result: (final) => dispatch({ type: 'final_scores', scores: final }),
+        error: () => dispatch({ type: 'final_scores', scores: SYNTHETIC_FINAL }),
+      },
+    ).catch(() => dispatch({ type: 'final_scores', scores: SYNTHETIC_FINAL }))
   }, [])
 
   useEffect(() => {

@@ -3,12 +3,13 @@ import { PhoneOff } from 'lucide-react'
 import { Waveform } from '../components/shared/Waveform.tsx'
 import { ScoreTile } from '../components/shared/ScoreTile.tsx'
 import { CalibratingOverlay } from '../components/shared/CalibratingOverlay.tsx'
+import { ScoringOverlay } from '../components/shared/ScoringOverlay.tsx'
 import { BEHAVIORS } from '../data/behaviors.ts'
 import { WHISPER_HISTORY } from '../data/synthetic-call.ts'
 import type { Persona, ScoreMap, TranscriptLine, WhisperPrompt } from '../types.ts'
 
 export function LiveCall({
-  persona, userActive, aiActive, scores, transcript, whisper, calibrating, onEnd, elapsed,
+  persona, userActive, aiActive, scores, transcript, whisper, calibrating, scoring = false, onEnd, elapsed,
   voiceMode = 'unknown', voiceError = null,
 }: {
   persona: Persona
@@ -18,6 +19,7 @@ export function LiveCall({
   transcript: TranscriptLine[]
   whisper: WhisperPrompt | null
   calibrating: boolean
+  scoring?: boolean
   onEnd: () => void
   elapsed: string
   voiceMode?: 'live' | 'synthetic' | 'unknown'
@@ -66,6 +68,7 @@ export function LiveCall({
   return (
     <div className="panel" style={{ position: 'relative', margin: 16, overflow: 'hidden' }} role="region" aria-label="Live roleplay call">
       {calibrating && <CalibratingOverlay />}
+      {scoring && <ScoringOverlay live={voiceMode === 'live'} />}
 
       <div className="call-header">
         <div>

@@ -159,11 +159,21 @@ export class VoiceSession {
     })
 
     // 3. Send session.update with persona + audio config.
+    //    The persona prompt is wrapped in a stage-direction header so the
+    //    model knows it's already on a sales call (not a wrong-number call).
+    const stagedInstructions = [
+      'STAGE: A sales rep has just dialed your direct line for a 5-minute discovery call you agreed to take.',
+      'OPENING: Speak FIRST. Greet the rep briefly and slightly impatiently. One sentence. Then wait.',
+      'ROLE: Stay in character at all times. Never break character or admit you are an AI.',
+      '',
+      opts.instructions,
+    ].join('\n')
+
     ws.send(JSON.stringify({
       type: 'session.update',
       session: {
         modalities: ['audio', 'text'],
-        instructions: opts.instructions,
+        instructions: stagedInstructions,
         voice: opts.voice,
         input_audio_format: 'pcm16',
         output_audio_format: 'pcm16',
@@ -174,6 +184,15 @@ export class VoiceSession {
           prefix_padding_ms: 200,
           silence_duration_ms: 600,
         },
+      },
+    }))
+
+    // 3b. Trigger the AI buyer to speak first so the rep hears the opening.
+    ws.send(JSON.stringify({
+      type: 'response.create',
+      response: {
+        modalities: ['audio', 'text'],
+        instructions: 'Speak your one-sentence impatient greeting now, then stop.',
       },
     }))
 

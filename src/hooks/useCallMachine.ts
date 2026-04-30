@@ -1,5 +1,5 @@
 import { useReducer, useEffect, useRef, useCallback } from 'react'
-import { SyntheticEngine } from '../lib/synthetic-engine.ts'
+import { SyntheticEngine, SYNTHETIC_FINAL } from '../lib/synthetic-engine.ts'
 import { VoiceSession } from '../lib/voice-session.ts'
 import { mintToken } from '../lib/api.ts'
 import { buildPersonaSystemPrompt } from '../data/persona-builder.ts'
@@ -102,12 +102,13 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
   useEffect(() => { customCfgRef.current = opts?.customConfig }, [opts?.customConfig])
 
   // End-call helper — stable reference so the auto-end timer can call it.
+  // Dispatch the final-scores action directly so we never depend on the
+  // synthetic engine still being mounted (the live useEffect's cleanup tears
+  // it down as soon as state.call leaves 'live').
   const end = useCallback((_reason: 'user' | 'auto' | 'error' = 'user') => {
-    dispatch({ type: 'end' })
     voice.current?.stop()
     voice.current = null
-    // Synthetic engine resolves the final scorecard so the user always lands on Scorecard.
-    setTimeout(() => engine.current?.endNow(), 600)
+    dispatch({ type: 'final_scores', scores: SYNTHETIC_FINAL })
   }, [])
 
   useEffect(() => {

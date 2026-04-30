@@ -25,7 +25,7 @@ function App() {
   const [custom, setCustom] = useState<CustomConfig>({ industry: 'fintech', title: 'cfo', difficulty: 'hard', objection: 'price' })
   const [helpOpen, setHelpOpen] = useState(false)
 
-  const { state, selectPersona, start, end, reset, forceState } = useCallMachine(synthetic)
+  const { state, selectPersona, start, end, reset, forceState } = useCallMachine(synthetic, { customConfig: custom })
 
   const persona: Persona = useMemo(
     () => PRESETS.find((p) => p.id === presetId) ?? PRESETS[0],
@@ -96,8 +96,10 @@ function App() {
             transcript={state.transcript}
             whisper={state.whisper}
             calibrating={state.call === 'calibrating'}
-            onEnd={end}
+            onEnd={() => end('user')}
             elapsed={elapsed}
+            voiceMode={state.voiceMode}
+            voiceError={state.voiceError}
           />
         )}
 

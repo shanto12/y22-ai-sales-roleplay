@@ -27,7 +27,7 @@ export function TopChrome({
           role="tab"
           aria-selected={tab === 'roleplay'}
         >
-          <Phone size={13} style={{ marginRight: 6, verticalAlign: '-2px' }} /> Roleplay
+          <Phone size={13} /> <span>Roleplay</span>
         </button>
         <button
           className={`tab ${tab === 'prompt' ? 'active' : ''}`}
@@ -35,7 +35,7 @@ export function TopChrome({
           role="tab"
           aria-selected={tab === 'prompt'}
         >
-          <Beaker size={13} style={{ marginRight: 6, verticalAlign: '-2px' }} /> Prompt Lab
+          <Beaker size={13} /> <span>Prompt Lab</span>
         </button>
         <button
           className={`tab ${tab === 'guide' ? 'active' : ''}`}
@@ -43,7 +43,7 @@ export function TopChrome({
           role="tab"
           aria-selected={tab === 'guide'}
         >
-          <Book size={13} style={{ marginRight: 6, verticalAlign: '-2px' }} /> Demo Guide
+          <Book size={13} /> <span>Demo Guide</span>
         </button>
       </nav>
       <div className="chrome-right">

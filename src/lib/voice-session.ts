@@ -1,125 +1,351 @@
 /**
- * Live voice session orchestrator for xAI Grok Voice Agent API.
+ * Live voice session for xAI Grok Voice Agent API.
  *
- * Browser ⇆ wss://api.x.ai/v1/realtime, OpenAI-Realtime-compatible.
- * Auth via the ephemeral client secret minted by /api/mint-token.
+ * Connects the browser to wss://api.x.ai/v1/realtime, captures mic audio
+ * via an AudioWorklet, encodes to PCM16, and plays back the assistant audio
+ * stream returned over the same WebSocket.
  *
- * This module is the boundary between the React tree (which is pure)
- * and the imperative WebSocket / mic / audio worklet plumbing.
+ * Auth: ephemeral client-secret minted server-side by /api/mint-token. The
+ * long-lived XAI_API_KEY never enters the browser.
  *
- * For v1 we capture transcripts only — playback of the audio downlink
- * is implemented by the browser audio worklet (not included in this file
- * to keep it focused; the synthetic engine is the demo's primary path).
+ * Compatibility: xAI's realtime API speaks the OpenAI Realtime spec with a
+ * few caveats (renamed events, no `conversation.item.retrieve`, etc). The
+ * cookbook subprotocol `["realtime", "openai-insecure-api-key.${TOKEN}",
+ * "openai-beta.realtime-v1"]` is what xAI's official web sample uses.
  */
 
 import type { TranscriptLine } from '../types.ts'
 
 export interface VoiceSessionEvents {
+  onConnecting: () => void
   onConnected: () => void
   onUserText: (text: string, t: string) => void
   onAssistantText: (text: string, t: string) => void
+  onUserSpeaking: (active: boolean) => void
+  onAssistantSpeaking: (active: boolean) => void
   onError: (err: string) => void
   onClose: () => void
 }
 
 const REALTIME_URL = 'wss://api.x.ai/v1/realtime'
+const SAMPLE_RATE = 24000
+
+// Inline AudioWorklet source. Captures mic input as Float32 chunks and posts
+// them back to the main thread for PCM16 encoding + WS send.
+const WORKLET_SOURCE = `
+class PCM16CaptureProcessor extends AudioWorkletProcessor {
+  constructor() { super(); this._frameSize = 1024; this._buf = []; this._count = 0; }
+  process(inputs) {
+    const input = inputs[0];
+    if (!input || !input[0]) return true;
+    const ch0 = input[0];
+    this._buf.push(ch0.slice());
+    this._count += ch0.length;
+    while (this._count >= this._frameSize) {
+      const out = new Float32Array(this._frameSize);
+      let written = 0;
+      while (written < this._frameSize && this._buf.length) {
+        const head = this._buf[0];
+        const need = this._frameSize - written;
+        if (head.length <= need) {
+          out.set(head, written);
+          written += head.length;
+          this._buf.shift();
+        } else {
+          out.set(head.subarray(0, need), written);
+          this._buf[0] = head.subarray(need);
+          written += need;
+        }
+      }
+      this._count -= this._frameSize;
+      this.port.postMessage(out, [out.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('pcm16-capture', PCM16CaptureProcessor);
+`
+
+function floatToPCM16(input: Float32Array): Int16Array {
+  const out = new Int16Array(input.length)
+  for (let i = 0; i < input.length; i++) {
+    const s = Math.max(-1, Math.min(1, input[i]))
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff
+  }
+  return out
+}
+
+function int16ToBase64(buf: Int16Array): string {
+  const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+  let s = ''
+  // Chunk to avoid call-stack limits for big payloads.
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    s += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)))
+  }
+  return btoa(s)
+}
+
+function base64ToInt16(b64: string): Int16Array {
+  const bin = atob(b64)
+  const len = bin.length
+  const bytes = new Uint8Array(len)
+  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i)
+  return new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2)
+}
+
+function pcm16ToFloat32(int16: Int16Array): Float32Array {
+  const out = new Float32Array(int16.length)
+  for (let i = 0; i < int16.length; i++) out[i] = int16[i] / 0x8000
+  return out
+}
+
+interface SessionOpts {
+  token: string
+  model: string
+  instructions: string
+  voice: string // e.g. 'eve'
+}
 
 export class VoiceSession {
   private ws: WebSocket | null = null
   private startedAt = 0
-  private collectedUser: string[] = []
-  private collectedAssistant: string[] = []
-  private readonly events: VoiceSessionEvents
+  private events: VoiceSessionEvents
+
+  // Audio capture
+  private inputCtx: AudioContext | null = null
+  private mediaStream: MediaStream | null = null
+  private workletNode: AudioWorkletNode | null = null
+  private workletUrl: string | null = null
+
+  // Audio playback
+  private outputCtx: AudioContext | null = null
+  private nextPlaybackTime = 0
+  private assistantSpeakingFlag = false
+  private assistantSpeakTimer: ReturnType<typeof setTimeout> | null = null
+
+  // Transcript collation
+  private currentAssistantTurn = ''
 
   constructor(events: VoiceSessionEvents) {
     this.events = events
   }
 
   private elapsed(): string {
-    const ms = Date.now() - this.startedAt
-    const s = Math.floor(ms / 1000)
+    const s = Math.floor((Date.now() - this.startedAt) / 1000)
     return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
   }
 
-  async start({ token, model, instructions }: { token: string; model: string; instructions: string }) {
+  /**
+   * Mint the WebSocket, set up mic capture and audio playback. Resolves once
+   * the WebSocket is open and `session.update` has been sent.
+   */
+  async start(opts: SessionOpts): Promise<void> {
+    this.events.onConnecting()
     this.startedAt = Date.now()
-    const url = `${REALTIME_URL}?model=${encodeURIComponent(model)}`
-    // Subprotocol pattern from xAI cookbook (OpenAI-Realtime-compat).
+
+    // 1. Mic permission + AudioContext (must happen on user gesture).
+    try {
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: SAMPLE_RATE,
+        },
+      })
+    } catch (err) {
+      this.events.onError(`Microphone access denied or unavailable. ${(err as Error).message}`)
+      throw err
+    }
+
+    // Some browsers ignore the sampleRate constraint; create the AudioContext
+    // at SAMPLE_RATE so resampling is automatic on read.
+    this.inputCtx = new AudioContext({ sampleRate: SAMPLE_RATE })
+    const blob = new Blob([WORKLET_SOURCE], { type: 'application/javascript' })
+    this.workletUrl = URL.createObjectURL(blob)
+    await this.inputCtx.audioWorklet.addModule(this.workletUrl)
+    const src = this.inputCtx.createMediaStreamSource(this.mediaStream)
+    this.workletNode = new AudioWorkletNode(this.inputCtx, 'pcm16-capture', { numberOfOutputs: 0 })
+
+    this.outputCtx = new AudioContext({ sampleRate: SAMPLE_RATE })
+    this.nextPlaybackTime = this.outputCtx.currentTime
+
+    // 2. Open WebSocket with the OpenAI-Realtime-compatible subprotocol.
+    const url = `${REALTIME_URL}?model=${encodeURIComponent(opts.model)}`
     const ws = new WebSocket(url, [
       'realtime',
-      `openai-insecure-api-key.${token}`,
+      `openai-insecure-api-key.${opts.token}`,
       'openai-beta.realtime-v1',
     ])
+    ws.binaryType = 'arraybuffer'
     this.ws = ws
 
-    ws.addEventListener('open', () => {
-      ws.send(JSON.stringify({
-        type: 'session.update',
-        session: {
-          instructions,
-          voice: 'eve',
-          input_audio_transcription: { model: 'whisper-1' },
-        },
-      }))
-      this.events.onConnected()
-    })
-
-    ws.addEventListener('message', (ev) => {
-      try {
-        const msg = JSON.parse(typeof ev.data === 'string' ? ev.data : '')
-        this.handleEvent(msg)
-      } catch (e) {
-        this.events.onError(`parse ${(e as Error).message}`)
+    await new Promise<void>((resolve, reject) => {
+      const onOpen = () => {
+        ws.removeEventListener('error', onError)
+        resolve()
       }
+      const onError = () => {
+        ws.removeEventListener('open', onOpen)
+        reject(new Error('WebSocket connection failed'))
+      }
+      ws.addEventListener('open', onOpen, { once: true })
+      ws.addEventListener('error', onError, { once: true })
     })
 
-    ws.addEventListener('error', () => this.events.onError('websocket error'))
+    // 3. Send session.update with persona + audio config.
+    ws.send(JSON.stringify({
+      type: 'session.update',
+      session: {
+        modalities: ['audio', 'text'],
+        instructions: opts.instructions,
+        voice: opts.voice,
+        input_audio_format: 'pcm16',
+        output_audio_format: 'pcm16',
+        input_audio_transcription: { model: 'whisper-1' },
+        turn_detection: {
+          type: 'server_vad',
+          threshold: 0.5,
+          prefix_padding_ms: 200,
+          silence_duration_ms: 600,
+        },
+      },
+    }))
+
+    // 4. Wire mic worklet → WebSocket.
+    this.workletNode.port.onmessage = (ev: MessageEvent<Float32Array>) => {
+      if (ws.readyState !== WebSocket.OPEN) return
+      const float = ev.data
+      const pcm = floatToPCM16(float)
+      const b64 = int16ToBase64(pcm)
+      ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }))
+    }
+    src.connect(this.workletNode)
+
+    // 5. Wire incoming events.
+    ws.addEventListener('message', (ev) => this.handleEvent(ev.data))
+    ws.addEventListener('error', () => this.events.onError('WebSocket error during session'))
     ws.addEventListener('close', () => this.events.onClose())
+
+    this.events.onConnected()
   }
 
-  private handleEvent(msg: { type?: string; delta?: string; transcript?: string }) {
+  private handleEvent(raw: unknown) {
+    if (typeof raw !== 'string') return
+    let msg: { type?: string; delta?: string; transcript?: string; audio?: string; item?: { transcript?: string }; error?: { message?: string } }
+    try { msg = JSON.parse(raw) } catch { return }
     if (!msg?.type) return
+
     switch (msg.type) {
+      case 'response.output_audio.delta':
+      case 'response.audio.delta': {
+        if (typeof msg.delta === 'string') this.queueAudio(msg.delta)
+        this.markAssistantSpeaking()
+        break
+      }
       case 'response.output_audio_transcript.delta':
-        if (typeof msg.delta === 'string') this.collectedAssistant.push(msg.delta)
+      case 'response.audio_transcript.delta':
+      case 'response.text.delta': {
+        if (typeof msg.delta === 'string') this.currentAssistantTurn += msg.delta
         break
+      }
       case 'response.output_audio_transcript.done':
-        this.events.onAssistantText(this.collectedAssistant.join(''), this.elapsed())
-        this.collectedAssistant = []
-        break
-      case 'conversation.item.input_audio_transcription.completed':
-        if (typeof msg.transcript === 'string') {
-          this.collectedUser.push(msg.transcript)
-          this.events.onUserText(msg.transcript, this.elapsed())
+      case 'response.audio_transcript.done':
+      case 'response.text.done':
+      case 'response.done': {
+        if (this.currentAssistantTurn) {
+          this.events.onAssistantText(this.currentAssistantTurn.trim(), this.elapsed())
+          this.currentAssistantTurn = ''
         }
         break
+      }
+      case 'conversation.item.input_audio_transcription.completed': {
+        const text = (msg.transcript ?? msg.item?.transcript ?? '').trim()
+        if (text) this.events.onUserText(text, this.elapsed())
+        break
+      }
+      case 'input_audio_buffer.speech_started': {
+        this.events.onUserSpeaking(true)
+        break
+      }
+      case 'input_audio_buffer.speech_stopped': {
+        this.events.onUserSpeaking(false)
+        break
+      }
+      case 'error': {
+        this.events.onError(msg.error?.message ?? 'unknown realtime error')
+        break
+      }
       default:
         break
     }
   }
 
-  /**
-   * Manual mic plumbing is out of scope for the synthetic-first demo —
-   * the live path completes the loop using the browser's built-in
-   * realtime API + an AudioWorklet downstream of getUserMedia.
-   * For a recruiter walkthrough, the synthetic engine is enough to
-   * exercise the full UI and prove the architecture; switching to live
-   * is a single flag in /api/health.
-   */
-  stop(reason: 'user' | 'error' = 'user') {
-    if (this.ws) {
-      try {
-        this.ws.send(JSON.stringify({ type: 'session.close', reason }))
-      } catch { /* ignore */ }
-      this.ws.close()
-      this.ws = null
+  private markAssistantSpeaking() {
+    if (!this.assistantSpeakingFlag) {
+      this.assistantSpeakingFlag = true
+      this.events.onAssistantSpeaking(true)
     }
+    if (this.assistantSpeakTimer) clearTimeout(this.assistantSpeakTimer)
+    this.assistantSpeakTimer = setTimeout(() => {
+      this.assistantSpeakingFlag = false
+      this.events.onAssistantSpeaking(false)
+    }, 350)
+  }
+
+  private queueAudio(b64: string) {
+    if (!this.outputCtx) return
+    const int16 = base64ToInt16(b64)
+    if (int16.length === 0) return
+    const float = pcm16ToFloat32(int16)
+    const buf = this.outputCtx.createBuffer(1, float.length, SAMPLE_RATE)
+    // Copy via the channel-data view to avoid TS's ArrayBufferLike vs ArrayBuffer mismatch.
+    buf.getChannelData(0).set(float)
+    const src = this.outputCtx.createBufferSource()
+    src.buffer = buf
+    src.connect(this.outputCtx.destination)
+    const startAt = Math.max(this.outputCtx.currentTime + 0.02, this.nextPlaybackTime)
+    src.start(startAt)
+    this.nextPlaybackTime = startAt + buf.duration
   }
 
   consumedTranscript(): TranscriptLine[] {
-    return [
-      ...this.collectedUser.map((text) => ({ t: this.elapsed(), who: 'user' as const, text })),
-      ...this.collectedAssistant.map((text) => ({ t: this.elapsed(), who: 'buyer' as const, text })),
-    ]
+    // The session events emit each turn directly; the upstream caller keeps
+    // the full transcript in its reducer. Returning [] preserves backwards
+    // compat with previous callers that want to flush on close.
+    return []
+  }
+
+  stop() {
+    if (this.assistantSpeakTimer) {
+      clearTimeout(this.assistantSpeakTimer)
+      this.assistantSpeakTimer = null
+    }
+    if (this.ws) {
+      try { this.ws.close() } catch { /* ignore */ }
+      this.ws = null
+    }
+    if (this.workletNode) {
+      try { this.workletNode.disconnect() } catch { /* ignore */ }
+      this.workletNode = null
+    }
+    if (this.mediaStream) {
+      this.mediaStream.getTracks().forEach((t) => t.stop())
+      this.mediaStream = null
+    }
+    if (this.inputCtx) {
+      this.inputCtx.close().catch(() => {})
+      this.inputCtx = null
+    }
+    if (this.outputCtx) {
+      this.outputCtx.close().catch(() => {})
+      this.outputCtx = null
+    }
+    if (this.workletUrl) {
+      URL.revokeObjectURL(this.workletUrl)
+      this.workletUrl = null
+    }
   }
 }

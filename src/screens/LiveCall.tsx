@@ -9,6 +9,7 @@ import type { Persona, ScoreMap, TranscriptLine, WhisperPrompt } from '../types.
 
 export function LiveCall({
   persona, userActive, aiActive, scores, transcript, whisper, calibrating, onEnd, elapsed,
+  voiceMode = 'unknown', voiceError = null,
 }: {
   persona: Persona
   userActive: boolean
@@ -19,7 +20,16 @@ export function LiveCall({
   calibrating: boolean
   onEnd: () => void
   elapsed: string
+  voiceMode?: 'live' | 'synthetic' | 'unknown'
+  voiceError?: string | null
 }) {
+  // Compute a 5:00 - elapsed countdown so the user sees the auto-end window.
+  const [mm, ss] = elapsed.split(':').map((n) => Number(n) || 0)
+  const elapsedSeconds = mm * 60 + ss
+  const remaining = Math.max(0, 5 * 60 - elapsedSeconds)
+  const remStr = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`
+  const remainingClass = remaining <= 30 ? 'fg-coral' : remaining <= 60 ? 'fg-amber' : 'fg-green'
+
   const [whisperState, setWhisperState] = useState<'visible' | 'used' | 'dismissed' | 'held'>('visible')
   const [history, setHistory] = useState<string[]>(WHISPER_HISTORY)
   const [lastWhisperText, setLastWhisperText] = useState<string | undefined>(undefined)
@@ -66,6 +76,11 @@ export function LiveCall({
             <span className={`diff-pill ${persona.difficulty}`} style={{ marginRight: 10 }}>{persona.difficulty.toUpperCase()}</span>
             Persona profile: {persona.profile}
           </div>
+          {voiceMode === 'synthetic' && voiceError && (
+            <div className="voice-fallback-note" role="status">
+              <strong>Mic / voice unavailable.</strong> Playing scripted call so the demo keeps moving. <span className="mono-mute">{voiceError}</span>
+            </div>
+          )}
         </div>
         <button className="btn btn-coral" onClick={onEnd} aria-label="End call (Esc)" data-testid="end-call">
           <PhoneOff size={14} /> End call <span className="kbd" style={{ marginLeft: 6 }}>Esc</span>
@@ -79,8 +94,11 @@ export function LiveCall({
           <div className="voice-tag">input · 48 kHz · –11.2 dB</div>
         </div>
 
-        <div className="timer-pill">
-          <span className="now">{elapsed}</span> <span style={{ color: 'var(--text-mute)' }}>/ ~05:00</span>
+        <div className="timer-pill" title="Calls auto-end at 5:00 to control xAI voice costs">
+          <span className="now">{elapsed}</span>
+          <span style={{ color: 'var(--text-mute)', margin: '0 6px' }}>/</span>
+          <span className={remainingClass} style={{ fontWeight: 600 }}>{remStr}</span>
+          <span style={{ color: 'var(--text-mute)', marginLeft: 6, fontSize: 10 }}>left</span>
         </div>
 
         <div className="wave-side r">

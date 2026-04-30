@@ -8,15 +8,27 @@ export interface SyntheticEvents {
   onCallEnd: (final: ScoreMap) => void
 }
 
+export interface SyntheticOptions {
+  /**
+   * When true, the engine does not push transcript lines. Use in live voice
+   * mode so the real WS-driven transcript is the only source of truth — the
+   * engine still drives the score-tile timeline and whisper drops as the
+   * cockpit's visual layer.
+   */
+  skipTranscript?: boolean
+}
+
 export class SyntheticEngine {
   private timers: ReturnType<typeof setTimeout>[] = []
   private alive = true
   // Real-time multiplier — 1 means "real call speed", smaller = faster.
   private readonly speed = 0.25
   private readonly events: SyntheticEvents
+  private readonly options: SyntheticOptions
 
-  constructor(events: SyntheticEvents) {
+  constructor(events: SyntheticEvents, options: SyntheticOptions = {}) {
     this.events = events
+    this.options = options
   }
 
   start() {
@@ -34,15 +46,17 @@ export class SyntheticEngine {
         }, ev.atMs * this.speed),
       )
     }
-    // Transcript trickle.
-    TRANSCRIPT.forEach((line, i) => {
-      this.timers.push(
-        setTimeout(() => {
-          if (!this.alive) return
-          this.events.onTranscript(line)
-        }, (1500 + i * 1800) * this.speed),
-      )
-    })
+    // Transcript trickle (only in synthetic-only / sample-playback mode).
+    if (!this.options.skipTranscript) {
+      TRANSCRIPT.forEach((line, i) => {
+        this.timers.push(
+          setTimeout(() => {
+            if (!this.alive) return
+            this.events.onTranscript(line)
+          }, (1500 + i * 1800) * this.speed),
+        )
+      })
+    }
     // Whisper drops mid-call.
     this.timers.push(
       setTimeout(() => {
@@ -55,10 +69,7 @@ export class SyntheticEngine {
     this.timers.push(
       setTimeout(() => {
         if (!this.alive) return
-        // settle to mid-state first, then end the call
         this.events.onWhisper(null)
-        // do not auto-end — let the user click End call. If you want auto-end:
-        // this.events.onCallEnd(FINAL_SCORES)
       }, lastAt * this.speed),
     )
   }

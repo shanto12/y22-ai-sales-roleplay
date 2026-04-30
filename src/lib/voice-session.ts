@@ -29,42 +29,8 @@ export interface VoiceSessionEvents {
 
 const REALTIME_URL = 'wss://api.x.ai/v1/realtime'
 const SAMPLE_RATE = 24000
-
-// Inline AudioWorklet source. Captures mic input as Float32 chunks and posts
-// them back to the main thread for PCM16 encoding + WS send.
-const WORKLET_SOURCE = `
-class PCM16CaptureProcessor extends AudioWorkletProcessor {
-  constructor() { super(); this._frameSize = 1024; this._buf = []; this._count = 0; }
-  process(inputs) {
-    const input = inputs[0];
-    if (!input || !input[0]) return true;
-    const ch0 = input[0];
-    this._buf.push(ch0.slice());
-    this._count += ch0.length;
-    while (this._count >= this._frameSize) {
-      const out = new Float32Array(this._frameSize);
-      let written = 0;
-      while (written < this._frameSize && this._buf.length) {
-        const head = this._buf[0];
-        const need = this._frameSize - written;
-        if (head.length <= need) {
-          out.set(head, written);
-          written += head.length;
-          this._buf.shift();
-        } else {
-          out.set(head.subarray(0, need), written);
-          this._buf[0] = head.subarray(need);
-          written += need;
-        }
-      }
-      this._count -= this._frameSize;
-      this.port.postMessage(out, [out.buffer]);
-    }
-    return true;
-  }
-}
-registerProcessor('pcm16-capture', PCM16CaptureProcessor);
-`
+// Worklet served as a static file so we don't need `blob:` in CSP script-src.
+const WORKLET_URL = '/audio-worklet.js'
 
 function floatToPCM16(input: Float32Array): Int16Array {
   const out = new Int16Array(input.length)
@@ -116,7 +82,6 @@ export class VoiceSession {
   private inputCtx: AudioContext | null = null
   private mediaStream: MediaStream | null = null
   private workletNode: AudioWorkletNode | null = null
-  private workletUrl: string | null = null
 
   // Audio playback
   private outputCtx: AudioContext | null = null
@@ -163,9 +128,7 @@ export class VoiceSession {
     // Some browsers ignore the sampleRate constraint; create the AudioContext
     // at SAMPLE_RATE so resampling is automatic on read.
     this.inputCtx = new AudioContext({ sampleRate: SAMPLE_RATE })
-    const blob = new Blob([WORKLET_SOURCE], { type: 'application/javascript' })
-    this.workletUrl = URL.createObjectURL(blob)
-    await this.inputCtx.audioWorklet.addModule(this.workletUrl)
+    await this.inputCtx.audioWorklet.addModule(WORKLET_URL)
     const src = this.inputCtx.createMediaStreamSource(this.mediaStream)
     this.workletNode = new AudioWorkletNode(this.inputCtx, 'pcm16-capture', { numberOfOutputs: 0 })
 
@@ -342,10 +305,6 @@ export class VoiceSession {
     if (this.outputCtx) {
       this.outputCtx.close().catch(() => {})
       this.outputCtx = null
-    }
-    if (this.workletUrl) {
-      URL.revokeObjectURL(this.workletUrl)
-      this.workletUrl = null
     }
   }
 }

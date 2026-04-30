@@ -108,6 +108,9 @@ function App() {
           <Scorecard
             persona={persona}
             scores={state.finalScores ?? SYNTHETIC_FINAL}
+            moment={state.moment}
+            coaching={state.coaching}
+            transcript={state.transcript}
             onTryHarder={() => { setCustom({ ...custom, difficulty: 'hard' }); reset(); start() }}
             onAnother={() => reset()}
           />

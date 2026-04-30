@@ -1,10 +1,20 @@
 import { useReducer, useEffect, useRef, useCallback } from 'react'
 import { SyntheticEngine, SYNTHETIC_FINAL } from '../lib/synthetic-engine.ts'
 import { VoiceSession } from '../lib/voice-session.ts'
-import { mintToken, streamScore } from '../lib/api.ts'
+import { mintToken, streamScore, fetchWhisper, type MomentClip } from '../lib/api.ts'
 import { buildPersonaSystemPrompt } from '../data/persona-builder.ts'
 import type { BehaviorId, CallState, CustomConfig, Persona, ScoreMap, Score, TranscriptLine, WhisperPrompt } from '../types.ts'
 import { BEHAVIORS } from '../data/behaviors.ts'
+
+const DEFAULT_MOMENT: MomentClip = {
+  time: '00:52',
+  text: 'when she said "we already have a vendor", you reframed instead of discounting.',
+}
+const DEFAULT_COACHING = [
+  '**When she challenged ROI**, lead with the 90-day payback line **before any discount.**',
+  '**Multithread earlier** — ask for the CRO\'s name in the discovery turn, not the close.',
+  '**Cut your talk:listen** to 50/50 before minute 2. Ask, then count to three.',
+]
 
 const EMPTY_SCORES: ScoreMap = BEHAVIORS.reduce((acc, b) => {
   acc[b.id] = { score: 0, band: 'coral', rationale: 'Awaiting first signal…', updated: false }
@@ -15,6 +25,8 @@ interface State {
   call: CallState
   scores: ScoreMap
   finalScores: ScoreMap | null
+  moment: MomentClip
+  coaching: string[]
   transcript: TranscriptLine[]
   whisper: WhisperPrompt | null
   userActive: boolean
@@ -33,8 +45,10 @@ type Action =
   | { type: 'transcript'; line: TranscriptLine }
   | { type: 'whisper'; whisper: WhisperPrompt | null }
   | { type: 'voice_activity'; user?: boolean; ai?: boolean }
+  | { type: 'moment'; moment: MomentClip }
+  | { type: 'coaching'; bullets: string[] }
   | { type: 'end' }
-  | { type: 'final_scores'; scores: ScoreMap }
+  | { type: 'final_scores'; scores: ScoreMap; moment?: MomentClip; coaching?: string[] }
   | { type: 'reset' }
   | { type: 'force_state'; call: CallState }
 
@@ -42,6 +56,8 @@ const initial = (): State => ({
   call: 'idle',
   scores: structuredClone(EMPTY_SCORES),
   finalScores: null,
+  moment: DEFAULT_MOMENT,
+  coaching: DEFAULT_COACHING,
   transcript: [],
   whisper: null,
   userActive: false,
@@ -54,15 +70,23 @@ const initial = (): State => ({
 function reducer(s: State, a: Action): State {
   switch (a.type) {
     case 'select_persona': return { ...s, persona: a.persona }
-    case 'start':          return { ...s, call: 'calibrating', scores: structuredClone(EMPTY_SCORES), transcript: [], whisper: null, finalScores: null, voiceError: null }
+    case 'start':          return { ...s, call: 'calibrating', scores: structuredClone(EMPTY_SCORES), transcript: [], whisper: null, finalScores: null, moment: DEFAULT_MOMENT, coaching: DEFAULT_COACHING, voiceError: null }
     case 'calibrated':     return { ...s, call: 'live' }
     case 'voice_mode':     return { ...s, voiceMode: a.mode, voiceError: a.error ?? null }
     case 'score_tile':     return { ...s, scores: { ...s.scores, [a.id]: a.score } }
     case 'transcript':     return { ...s, transcript: [...s.transcript, a.line] }
     case 'whisper':        return { ...s, whisper: a.whisper }
     case 'voice_activity': return { ...s, userActive: a.user ?? s.userActive, aiActive: a.ai ?? s.aiActive }
+    case 'moment':         return { ...s, moment: a.moment }
+    case 'coaching':       return { ...s, coaching: a.bullets }
     case 'end':            return { ...s, call: 'scoring' }
-    case 'final_scores':   return { ...s, finalScores: a.scores, call: 'done' }
+    case 'final_scores':   return {
+      ...s,
+      finalScores: a.scores,
+      moment: a.moment ?? s.moment,
+      coaching: a.coaching ?? s.coaching,
+      call: 'done',
+    }
     case 'reset':          return { ...initial(), persona: s.persona }
     case 'force_state':    return { ...s, call: a.call }
   }
@@ -110,10 +134,10 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
   // Flow:
   //   1. Stop the live voice session (closes WS + mic).
   //   2. Dispatch 'end' → call='scoring' (LiveCall stays visible with overlay).
-  //   3. POST the captured transcript to /api/score and stream tile updates
-  //      back into the reducer. Each tile re-fills with the real Grok-3 score.
-  //   4. When the final result arrives → dispatch 'final_scores' → call='done'
-  //      → Scorecard renders with the real grade.
+  //   3. POST the captured transcript to /api/score. Tile / moment / coaching
+  //      events stream back; each updates the reducer in real time.
+  //   4. When the final result arrives → dispatch 'final_scores' with moment +
+  //      coaching → call='done' → Scorecard renders with the real grade.
   //   5. On any error / empty transcript, fall back to SYNTHETIC_FINAL so the
   //      user never lands on a blank scorecard.
   const end = useCallback((_reason: 'user' | 'auto' | 'error' = 'user') => {
@@ -129,7 +153,15 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
     if (!usingLive) {
       // No real conversation happened — just resolve to the canned scorecard.
       // Keep a small delay so the scoring state is briefly visible (UX polish).
-      setTimeout(() => dispatch({ type: 'final_scores', scores: SYNTHETIC_FINAL }), 700)
+      setTimeout(
+        () => dispatch({
+          type: 'final_scores',
+          scores: SYNTHETIC_FINAL,
+          moment: DEFAULT_MOMENT,
+          coaching: DEFAULT_COACHING,
+        }),
+        700,
+      )
       return
     }
 
@@ -143,10 +175,27 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
       true,
       {
         tile: (id, score) => dispatch({ type: 'score_tile', id: id as BehaviorId, score }),
-        result: (final) => dispatch({ type: 'final_scores', scores: final }),
-        error: () => dispatch({ type: 'final_scores', scores: SYNTHETIC_FINAL }),
+        moment: (m) => dispatch({ type: 'moment', moment: m }),
+        coaching: (bullets) => dispatch({ type: 'coaching', bullets }),
+        result: (full) => dispatch({
+          type: 'final_scores',
+          scores: full.scores,
+          moment: full.moment,
+          coaching: full.coaching,
+        }),
+        error: () => dispatch({
+          type: 'final_scores',
+          scores: SYNTHETIC_FINAL,
+          moment: DEFAULT_MOMENT,
+          coaching: DEFAULT_COACHING,
+        }),
       },
-    ).catch(() => dispatch({ type: 'final_scores', scores: SYNTHETIC_FINAL }))
+    ).catch(() => dispatch({
+      type: 'final_scores',
+      scores: SYNTHETIC_FINAL,
+      moment: DEFAULT_MOMENT,
+      coaching: DEFAULT_COACHING,
+    }))
   }, [])
 
   useEffect(() => {
@@ -161,6 +210,84 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
     const t = setTimeout(() => end('auto'), MAX_CALL_DURATION_MS)
     return () => clearTimeout(t)
   }, [state.call, end])
+
+  // Real-time mid-call coaching: every ~22s during a live call (with a real
+  // voice session and a non-trivial transcript), poll /api/whisper. If the
+  // model returns a tactical tip we haven't shown before, dispatch it.
+  useEffect(() => {
+    if (state.call !== 'live') return
+    if (state.voiceMode !== 'live') return // synthetic engine handles whisper in synthetic mode
+
+    const seenTips = new Set<string>()
+    let lastTranscriptLen = 0
+    let cancelled = false
+
+    const tick = async () => {
+      const cur = stateRef.current
+      // Only poll if the transcript has grown since last poll (avoids redundant cost).
+      if (cur.transcript.length === lastTranscriptLen) return
+      lastTranscriptLen = cur.transcript.length
+      if (cur.transcript.length < 3) return
+
+      const w = await fetchWhisper(cur.transcript, {
+        name: cur.persona?.full_name ?? 'Buyer',
+        difficulty: cur.persona?.difficulty ?? 'hard',
+      })
+      if (cancelled || !w) return
+      const key = w.text.toLowerCase().trim()
+      if (seenTips.has(key)) return
+      seenTips.add(key)
+      dispatch({ type: 'whisper', whisper: w })
+    }
+
+    const id = setInterval(tick, 22000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [state.call, state.voiceMode])
+
+  // Real-time tile rescoring: every ~45s during a live call, POST the
+  // running transcript to /api/score with final=false. The streamed tile
+  // events update the cockpit in real time so the recruiter sees Grok-3
+  // actually judging behavior, not just the canned synthetic timeline.
+  useEffect(() => {
+    if (state.call !== 'live') return
+    if (state.voiceMode !== 'live') return
+
+    let cancelled = false
+    let lastTranscriptLen = 0
+    let inFlight = false
+
+    const tick = async () => {
+      if (inFlight) return
+      const cur = stateRef.current
+      if (cur.transcript.length === lastTranscriptLen) return
+      if (cur.transcript.length < 4) return
+      lastTranscriptLen = cur.transcript.length
+      inFlight = true
+      try {
+        await streamScore(
+          cur.transcript,
+          {
+            name: cur.persona?.full_name ?? 'Buyer',
+            title: cur.persona?.title ?? '—',
+            difficulty: cur.persona?.difficulty ?? 'hard',
+          },
+          false,
+          {
+            tile: (id, score) => {
+              if (cancelled) return
+              dispatch({ type: 'score_tile', id: id as BehaviorId, score: { ...score, updated: true } })
+            },
+            moment: (m) => { if (!cancelled) dispatch({ type: 'moment', moment: m }) },
+            coaching: (bullets) => { if (!cancelled) dispatch({ type: 'coaching', bullets }) },
+          },
+        )
+      } catch { /* ignore — we'll try again next tick */ }
+      finally { inFlight = false }
+    }
+
+    const id = setInterval(tick, 45000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [state.call, state.voiceMode])
 
   useEffect(() => {
     if (state.call !== 'live') return

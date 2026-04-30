@@ -4,13 +4,17 @@ import { ScoreTileFinal } from '../components/shared/ScoreTile.tsx'
 import { BEHAVIORS } from '../data/behaviors.ts'
 import { makeWaveBars } from '../lib/wave-bars.ts'
 import { TRANSCRIPT } from '../data/synthetic-call.ts'
-import type { Persona, ScoreMap } from '../types.ts'
+import type { MomentClip } from '../lib/api.ts'
+import type { Persona, ScoreMap, TranscriptLine } from '../types.ts'
 
 export function Scorecard({
-  persona, scores, onTryHarder, onAnother,
+  persona, scores, moment, coaching, transcript, onTryHarder, onAnother,
 }: {
   persona: Persona
   scores: ScoreMap
+  moment: MomentClip
+  coaching: string[]
+  transcript: TranscriptLine[]
   onTryHarder: () => void
   onAnother: () => void
 }) {
@@ -53,11 +57,9 @@ export function Scorecard({
     setPlaying((p) => !p)
   }
 
-  const coaching = [
-    { em: 'When she challenged ROI', text: ', lead with the 90-day payback line ', emEnd: 'before any discount.' },
-    { em: 'Multithread earlier', text: ' — ask for the CRO’s name in the discovery turn, not the close.', emEnd: '' },
-    { em: 'Cut your talk:listen', text: ' to 50/50 before minute 2. Ask, then count to three.', emEnd: '' },
-  ]
+  const transcriptLines = transcript.length > 0 ? transcript : TRANSCRIPT
+  const turnCount = transcriptLines.length
+  const wordCount = transcriptLines.reduce((acc, l) => acc + l.text.split(/\s+/).length, 0)
 
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }} role="region" aria-label="Call scorecard">
@@ -85,7 +87,7 @@ export function Scorecard({
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--green)' }}>
                 Moment the deal turned
               </div>
-              <div className="mono-mute" style={{ fontSize: 10 }}>00:52 → 01:22 · {Math.round(played * 30)}s of 30s</div>
+              <div className="mono-mute" style={{ fontSize: 10 }}>{moment.time} · {Math.round(played * 30)}s of 30s</div>
             </div>
             <div className="clip-wave">
               {clipBars.map((b, i) => (
@@ -93,7 +95,7 @@ export function Scorecard({
               ))}
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.4 }}>
-              <span className="mono" style={{ color: 'var(--green)' }}>00:52</span> — when she said “we already have a vendor”, you reframed instead of discounting.
+              <span className="mono" style={{ color: 'var(--green)' }}>{moment.time}</span> — {moment.text}
             </div>
           </div>
         </div>
@@ -115,10 +117,10 @@ export function Scorecard({
           <span className="mono-mute" style={{ fontSize: 11 }}>{savedBullets.size} of 3 saved to playbook</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {coaching.map((c, i) => (
+          {coaching.map((bullet, i) => (
             <div key={i} className="coach-bullet">
               <div className="idx">0{i + 1}</div>
-              <div className="body"><span className="em">{c.em}</span>{c.text}<span className="em" style={{ color: 'var(--text)' }}>{c.emEnd}</span></div>
+              <div className="body" dangerouslySetInnerHTML={{ __html: renderCoachingMarkdown(bullet) }} />
               <button
                 className={`save ${savedBullets.has(i) ? 'saved' : ''}`}
                 onClick={() => toggleBullet(i)}
@@ -141,12 +143,12 @@ export function Scorecard({
         >
           {transcriptOpen ? <ChevronDown size={14} className="chev" /> : <ChevronRight size={14} className="chev" />}
           <span style={{ color: 'var(--text)' }}>Full transcript</span>
-          <span style={{ marginLeft: 'auto' }} className="mono-mute">04:58 · {TRANSCRIPT.length} turns · 1,243 words</span>
+          <span style={{ marginLeft: 'auto' }} className="mono-mute">{turnCount} turns · {wordCount.toLocaleString()} words</span>
         </button>
         {transcriptOpen && (
           <div id="full-transcript" className="disclosure-body">
             <div className="transcript" style={{ height: 'auto', maxHeight: 360 }}>
-              {TRANSCRIPT.map((line, i) => (
+              {transcriptLines.map((line, i) => (
                 <div key={i} className={`line ${line.who}`}>
                   <span className="timestamp">{line.t}</span>
                   <span className="speaker">{line.who === 'user' ? 'you' : persona.full_name.split(' ')[0].toLowerCase()}</span>
@@ -166,4 +168,17 @@ export function Scorecard({
       </div>
     </div>
   )
+}
+
+/**
+ * Tiny markdown renderer for coaching bullets — supports **bold** only.
+ * Uses HTML escape for safety since we control both ends of this string.
+ */
+function renderCoachingMarkdown(s: string): string {
+  const escaped = s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+  return escaped.replace(/\*\*([^*]+)\*\*/g, '<span class="em">$1</span>')
 }

@@ -1,4 +1,15 @@
-import type { CustomConfig, HealthResponse, ScoreMap, TranscriptLine } from '../types.ts'
+import type { CustomConfig, HealthResponse, ScoreMap, TranscriptLine, WhisperPrompt } from '../types.ts'
+
+export interface MomentClip {
+  time: string
+  text: string
+}
+
+export interface ScoreResult {
+  scores: ScoreMap
+  moment: MomentClip
+  coaching: string[]
+}
 
 export interface MintTokenResponse {
   value: string | null
@@ -52,13 +63,20 @@ export interface ScoreEvent {
 }
 
 /**
- * Stream the scoring call. The caller handles per-tile deltas and the final result.
+ * Stream the scoring call. The caller handles per-tile deltas, the moment-card
+ * payload, the coaching bullets, and the final aggregated result.
  */
 export async function streamScore(
   transcript: TranscriptLine[],
   persona: { name: string; title: string; difficulty: string },
   final: boolean,
-  on: { tile?: (id: string, score: ScoreMap[keyof ScoreMap]) => void; result?: (m: ScoreMap) => void; error?: (e: string) => void },
+  on: {
+    tile?: (id: string, score: ScoreMap[keyof ScoreMap]) => void
+    moment?: (m: MomentClip) => void
+    coaching?: (bullets: string[]) => void
+    result?: (full: ScoreResult) => void
+    error?: (e: string) => void
+  },
 ): Promise<void> {
   const r = await fetch('/api/score', {
     method: 'POST',
@@ -70,13 +88,40 @@ export async function streamScore(
     if (event === 'tile' && on.tile) {
       const d = data as { id: string; score: ScoreMap[keyof ScoreMap] }
       on.tile(d.id, d.score)
+    } else if (event === 'moment' && on.moment) {
+      on.moment(data as MomentClip)
+    } else if (event === 'coaching' && on.coaching) {
+      const d = data as { bullets: string[] }
+      on.coaching(Array.isArray(d?.bullets) ? d.bullets : [])
     } else if (event === 'result' && on.result) {
-      on.result(data as ScoreMap)
+      on.result(data as ScoreResult)
     } else if (event === 'error' && on.error) {
       const d = data as { message?: string }
       on.error(d?.message ?? 'unknown')
     }
   })
+}
+
+/**
+ * Mid-call coaching tip generated from the rolling transcript. Returns null
+ * when the model can't suggest anything specific.
+ */
+export async function fetchWhisper(
+  transcript: TranscriptLine[],
+  persona: { name: string; difficulty: string },
+): Promise<WhisperPrompt | null> {
+  try {
+    const r = await fetch('/api/whisper', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ transcript, persona }),
+    })
+    if (!r.ok) return null
+    const data: { whisper?: WhisperPrompt | null } = await r.json()
+    return data?.whisper ?? null
+  } catch {
+    return null
+  }
 }
 
 async function parseSSE<T>(stream: ReadableStream<Uint8Array>, onDelta?: (t: string) => void): Promise<T> {

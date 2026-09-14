@@ -29,15 +29,13 @@ This screenshot shows one actual production voice test scored **21/30**, using s
 
 ## Architecture and state
 
-```mermaid
-flowchart LR
-  UI[React practice studio] --> TOKEN[Netlify ephemeral-token function]
-  TOKEN --> VOICE[xAI realtime voice]
-  UI <-->|PCM audio and transcripts| VOICE
-  UI --> SCORE[Netlify scoring and coaching functions]
-  SCORE --> MODEL[xAI Responses API]
-  MODEL --> SCORE
-  SCORE --> UI
+```text
+React practice studio
+  -> Netlify ephemeral-token function
+  -> xAI realtime voice (PCM audio and transcripts)
+  -> captured transcript
+  -> Netlify scoring/coaching functions + xAI Responses
+  -> six-behavior feedback in the studio
 ```
 
 | Layer | Implementation |

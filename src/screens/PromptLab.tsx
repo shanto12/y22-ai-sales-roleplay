@@ -23,12 +23,12 @@ export function PromptLab() {
           <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-mute)', fontWeight: 700, marginBottom: 4 }}>Prompt Lab</div>
           <div style={{ fontSize: 18, fontWeight: 600 }}>Persona: Skeptical mid-market CFO</div>
           <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
-            Versioned prompts · evaluated against the golden objection set (240 turns) · regression-checked vs. last release.
+            Illustrative prompt comparison. Scores below are sample data, not executed evaluations; selections do not change the live voice agent.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => setDiffOpen(true)}><Hash size={13} /> Diff v1.3 → v1.4</button>
-          <button className="btn btn-primary" onClick={() => setNewOpen(true)}><Sparkles size={13} /> New version</button>
+          <button className="btn btn-primary" onClick={() => setNewOpen(true)}><Sparkles size={13} /> Versioning roadmap</button>
         </div>
       </div>
 
@@ -41,12 +41,12 @@ export function PromptLab() {
               <div className="head">
                 <div>
                   <div className="ver">{p.ver}</div>
-                  <div className="mono-mute" style={{ fontSize: 10, marginTop: 2 }}>shipped {p.date} · temp 0.7</div>
+                  <div className="mono-mute" style={{ fontSize: 10, marginTop: 2 }}>example {p.date} · sample settings</div>
                 </div>
                 {isActive ? (
-                  <span className="diff-pill easy"><Check size={10} /> ACTIVE</span>
+                  <span className="diff-pill easy"><Check size={10} /> SELECTED</span>
                 ) : (
-                  <button className="pill-btn" onClick={() => setActiveVer(p.ver)}>Activate</button>
+                  <button className="pill-btn" onClick={() => setActiveVer(p.ver)}>Select example</button>
                 )}
               </div>
               <pre className={`body-code ${isExpanded ? 'expanded' : ''}`}>{p.body}</pre>
@@ -56,8 +56,8 @@ export function PromptLab() {
 
               <div className="evals">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span className="label" style={{ margin: 0 }}>Eval vs. golden set</span>
-                  <span className="mono-mute" style={{ fontSize: 10 }}>n=240</span>
+                  <span className="label" style={{ margin: 0 }}>Sample evaluation</span>
+                  <span className="mono-mute" style={{ fontSize: 10 }}>illustrative</span>
                 </div>
                 <div className="eval-bars">
                   {p.bars.map((b, j) => (
@@ -98,7 +98,7 @@ export function PromptLab() {
       <div style={{ marginTop: 18, padding: 14, border: '1px dashed var(--hairline-2)', borderRadius: 6, display: 'flex', gap: 14, alignItems: 'center', fontSize: 12, color: 'var(--text-dim)' }}>
         <Beaker size={16} style={{ color: 'var(--green)' }} />
         <div style={{ flex: 1 }}>
-          <span style={{ color: 'var(--text)', fontWeight: 600 }}>Prompts as software.</span> Every persona ships a version, an eval, and a regression delta. New prompts must beat the prior version on ≥5 of 8 dimensions before they’re activated.
+          <span style={{ color: 'var(--text)', fontWeight: 600 }}>Prompts as software.</span> Compare example prompt strategies here. The production voice prompt comes from the buyer selected in Roleplay; a persistent evaluation and release pipeline is future work.
         </div>
         <span className="mono-mute" style={{ fontSize: 11 }}>policy.md</span>
       </div>
@@ -117,9 +117,9 @@ export function PromptLab() {
         </div>
       </Modal>
 
-      <Modal open={newOpen} onClose={() => setNewOpen(false)} title="New persona version" width={520}>
+      <Modal open={newOpen} onClose={() => setNewOpen(false)} title="Prompt versioning roadmap" width={520}>
         <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.55 }}>
-          In production, this opens an editor that:
+          A future version editor could:
           <ul style={{ paddingLeft: 18, marginTop: 8 }}>
             <li>Forks the latest prompt as a draft.</li>
             <li>Runs the 240-turn golden objection set against it.</li>
@@ -127,7 +127,7 @@ export function PromptLab() {
             <li>Stores the version + eval as <span className="mono">y22/persona/&lt;name&gt;@&lt;sha&gt;.yaml</span>.</li>
           </ul>
           <div style={{ marginTop: 14, padding: 10, border: '1px dashed var(--hairline-2)', borderRadius: 6, fontSize: 12 }}>
-            <strong style={{ color: 'var(--green)' }}>Phase 2 in this demo.</strong> The eval harness is already structured for it (see <span className="mono">data/prompt-versions.ts</span>).
+            <strong style={{ color: 'var(--green)' }}>Phase 2 in this demo.</strong> Current sample data is documented in (see <span className="mono">data/prompt-versions.ts</span>).
           </div>
         </div>
       </Modal>

@@ -32,7 +32,7 @@ export default async (req) => {
 
   const apiKey = Netlify.env.get('XAI_API_KEY')
   const baseUrl = Netlify.env.get('XAI_API_BASE_URL') || 'https://api.x.ai/v1'
-  const model = Netlify.env.get('SCORING_MODEL') || 'grok-3'
+  const model = Netlify.env.get('SCORING_MODEL') || 'grok-4.20-0309-non-reasoning'
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -85,10 +85,11 @@ export default async (req) => {
 
         const r = await fetch(`${baseUrl}/responses`, {
           method: 'POST',
-          signal: AbortSignal.timeout(45000),
+          signal: AbortSignal.timeout(24000),
           headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
           body: JSON.stringify({
             model,
+            max_output_tokens: 1800,
             input: [
               { role: 'system', content: sys },
               { role: 'user', content: userText },
@@ -124,7 +125,7 @@ export default async (req) => {
             score,
             band,
             rationale: typeof raw?.rationale === 'string' ? raw.rationale : '-',
-            delta: typeof raw?.delta === 'string' ? raw.delta : null,
+            delta: null,
           }
           send('tile', { id: b.id, score: normalized[b.id] })
         }

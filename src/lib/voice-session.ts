@@ -133,6 +133,7 @@ export class VoiceSession {
     this.workletNode = new AudioWorkletNode(this.inputCtx, 'pcm16-capture', { numberOfOutputs: 0 })
 
     this.outputCtx = new AudioContext({ sampleRate: SAMPLE_RATE })
+    await Promise.all([this.inputCtx.resume(), this.outputCtx.resume()])
     this.nextPlaybackTime = this.outputCtx.currentTime
 
     // 2. Open WebSocket with the OpenAI-Realtime-compatible subprotocol.

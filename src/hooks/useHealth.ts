@@ -6,7 +6,7 @@ const FALLBACK: HealthResponse = {
   mode: 'synthetic',
   provider: 'xai',
   model: 'grok-voice-think-fast-1.0',
-  scoringModel: 'grok-3',
+  scoringModel: 'grok-4.20-0309-non-reasoning',
   capabilities: {
     voice:   { live: false, p50_ms: 0 },
     scoring: { live: false, p50_ms: 0 },

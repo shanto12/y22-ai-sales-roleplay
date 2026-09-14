@@ -37,6 +37,15 @@ export function Scorecard({
   const turnCount = transcriptLines.length
   const wordCount = transcriptLines.reduce((acc, l) => acc + l.text.split(/\s+/).length, 0)
 
+  if (error) return (
+    <section className="panel" style={{ margin: 24, padding: 28 }} aria-label="Call scorecard">
+      <h2>Feedback unavailable</h2><p role="status">{error}</p>
+      <p className="mono-mute">No grade was assigned. {transcript.length} captured transcript turns are preserved in this session.</p>
+      <details><summary>Captured transcript</summary>{transcript.map((line, i) => <p key={i}><strong>{line.who === 'user' ? 'You' : persona.full_name}</strong> · {line.t}<br />{line.text}</p>)}</details>
+      <button className="btn btn-primary" style={{ marginTop: 24 }} onClick={onAnother} data-testid="run-another">Run another roleplay <ArrowRight size={14} /></button>
+    </section>
+  )
+
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }} role="region" aria-label="Call scorecard">
       <div className="report-provenance" role="status">{error ? error : voiceMode === 'live' ? 'AI feedback from your captured conversation' : 'Scripted sample · scores and conversation are illustrative'}</div>

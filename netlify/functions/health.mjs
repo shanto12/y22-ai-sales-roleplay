@@ -5,7 +5,7 @@
 export default async () => {
   const hasKey = !!Netlify.env.get('XAI_API_KEY')
   const model = Netlify.env.get('GROK_VOICE_MODEL') || 'grok-voice-think-fast-1.0'
-  const scoringModel = Netlify.env.get('SCORING_MODEL') || 'grok-3'
+  const scoringModel = Netlify.env.get('SCORING_MODEL') || 'grok-4.20-0309-non-reasoning'
   const version = Netlify.env.get('COMMIT_REF') || Netlify.env.get('NETLIFY_COMMIT') || 'dev'
 
   const body = {

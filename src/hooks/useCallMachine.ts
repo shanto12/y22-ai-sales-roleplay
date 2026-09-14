@@ -355,12 +355,9 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
     }
   }, [state.call, state.persona, synthetic])
 
-  return {
-    state,
-    selectPersona: (persona: Persona) => dispatch({ type: 'select_persona', persona }),
-    start: () => dispatch({ type: 'start' }),
-    end,
-    reset: () => dispatch({ type: 'reset' }),
-    forceState: (s: CallState) => dispatch({ type: 'force_state', call: s }),
-  }
+  const selectPersona = useCallback((persona: Persona) => dispatch({ type: 'select_persona', persona }), [])
+  const start = useCallback(() => dispatch({ type: 'start' }), [])
+  const reset = useCallback(() => dispatch({ type: 'reset' }), [])
+  const forceState = useCallback((call: CallState) => dispatch({ type: 'force_state', call }), [])
+  return { state, selectPersona, start, end, reset, forceState }
 }

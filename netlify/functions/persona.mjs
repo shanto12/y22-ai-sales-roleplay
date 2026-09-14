@@ -22,7 +22,7 @@ export default async (req) => {
 
   const apiKey = process.env.XAI_API_KEY
   const baseUrl = process.env.XAI_API_BASE_URL || 'https://api.x.ai/v1'
-  const responsesModel = process.env.SCORING_MODEL || 'grok-3'
+  const responsesModel = process.env.SCORING_MODEL || 'grok-4.20-0309-non-reasoning'
 
   const stream = new ReadableStream({
     async start(controller) {

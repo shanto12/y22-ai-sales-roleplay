@@ -1551,3 +1551,35 @@ button:focus-visible,
   }
   .clip-wave .b { transition: none !important; }
 }
+
+/* Portfolio release: a spacious, responsive conversation studio. */
+:root { --bg:#0b1113; --panel:#121c1e; --card:#192629; --card-2:#223336; --hairline:#29383a; --hairline-2:#3b5050; --text:#eff4ec; --text-dim:#a5b7b2; --text-mute:#829994; --green:#c4e7a4; }
+body { background:radial-gradient(ellipse at 75% 10%,#18342b 0,transparent 45%),var(--bg); }
+.chrome { height:72px; padding:0 4%; background:rgba(11,17,19,.92); backdrop-filter:blur(18px); }
+.wordmark .y22-mark { width:34px; height:34px; font-size:13px; border-radius:10px; }
+.app-body { min-width:0; width:min(1440px,100%); margin:auto; }
+.studio-hero { display:grid; grid-template-columns:1.5fr 1fr; gap:40px; padding:64px 48px 44px; align-items:center; }
+.studio-eyebrow { color:var(--green); font-size:10px; letter-spacing:.19em; font-weight:700; }
+.studio-hero h1 { margin:20px 0; font-size:clamp(36px,4.3vw,64px); line-height:1.03; font-weight:550; letter-spacing:-.05em; }
+.studio-hero h1 em { color:var(--green); font-style:normal; }
+.studio-hero p { color:var(--text-dim); max-width:460px; font-size:16px; line-height:1.7; }
+.studio-features { display:flex; flex-wrap:wrap; gap:22px; margin-top:28px; font-size:10px; color:var(--text-dim); }
+.studio-orb { position:relative; display:grid; place-items:center; width:270px; height:270px; justify-self:center; border-radius:50%; background:radial-gradient(circle at 37% 30%,#efffc9,#b3da93 25%,#57754b 53%,#19251e 72%); box-shadow:0 30px 90px #0008,inset -16px -16px 36px #0007; }
+.orb-ring { position:absolute; width:340px; height:120px; border:1px solid #d2f6b777; border-radius:50%; transform:rotate(-28deg); }
+.orb-core { color:#17271e; font-size:82px; letter-spacing:-.09em; font-weight:650; }
+.orb-core span { font-size:40px; vertical-align:super; }
+.orb-caption { position:absolute; bottom:-33px; color:var(--text-mute); font-size:9px; letter-spacing:.18em; }
+.config-shell { padding:24px 48px 48px; }
+.config-presets-only .preset-column { width:100%; max-width:none; }
+.config-presets-only .preset-rail { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.preset { border-radius:16px; padding:22px; min-width:0; transition:background .2s, border-color .2s,transform .2s; }
+.preset:hover { transform:translateY(-2px); }
+.config-presets-only .preset { align-items:flex-start; }
+.config-presets-only .preset .avatar { display:none; }
+.preset .name { font-size:16px; }
+.preset .profile { line-height:1.6; }
+.btn-primary { color:#142017; background:var(--green); border-color:var(--green); }
+.report-provenance { color:var(--green); font-size:12px; border:1px solid var(--hairline-2); border-radius:8px; padding:12px 16px; }
+@media(max-width:1000px) { .chrome { height:auto;min-height:72px;flex-wrap:wrap;padding:16px;gap:12px; }.chrome-right{gap:8px}.live-chip .model{display:none}.synthetic-pill{display:none}.studio-hero{padding:40px 24px}.studio-orb{width:200px;height:200px}.orb-ring{width:250px}.config-shell{padding:24px}.config-presets-only .preset-rail{grid-template-columns:1fr}.config-expanded{grid-template-columns:1fr}.custom-panel{min-width:0}.form-row-split{flex-direction:column}.hero-strip{flex-direction:column}.moment-card{min-width:0} }
+@media(max-width:620px) { .studio-hero{grid-template-columns:1fr;padding:32px 20px 24px}.studio-orb{display:none}.studio-features{gap:12px}.chrome-right{margin-left:0}.tabs{margin-left:auto}.tab{padding:8px;font-size:12px}.config-shell{padding:20px}.call-row-a{flex-wrap:wrap}.call-row-c{grid-template-columns:1fr}.tiles-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.call-header{flex-direction:column;align-items:flex-start;gap:16px}.select{grid-template-columns:repeat(2,minmax(0,1fr))!important}.form-row-split{display:flex}.hero-total{min-width:0}.synthetic-banner{flex-wrap:wrap}.studio-hero h1{font-size:40px}.wordmark{font-size:12px}.chrome .tabs{order:3;width:100%}.chrome .tab{flex:1;justify-content:center} }
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

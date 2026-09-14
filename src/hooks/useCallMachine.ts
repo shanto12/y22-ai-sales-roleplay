@@ -39,6 +39,7 @@ interface State {
 type Action =
   | { type: 'select_persona'; persona: Persona }
   | { type: 'start' }
+  | { type: 'sample'; error?: string }
   | { type: 'calibrated' }
   | { type: 'voice_mode'; mode: 'live' | 'synthetic'; error?: string }
   | { type: 'score_tile'; id: BehaviorId; score: Score }
@@ -70,7 +71,8 @@ const initial = (): State => ({
 function reducer(s: State, a: Action): State {
   switch (a.type) {
     case 'select_persona': return { ...s, persona: a.persona }
-    case 'start':          return { ...s, call: 'calibrating', scores: structuredClone(EMPTY_SCORES), transcript: [], whisper: null, finalScores: null, moment: DEFAULT_MOMENT, coaching: DEFAULT_COACHING, voiceError: null }
+    case 'start':          return { ...s, voiceMode: 'unknown', call: 'calibrating', scores: structuredClone(EMPTY_SCORES), transcript: [], whisper: null, finalScores: null, moment: DEFAULT_MOMENT, coaching: DEFAULT_COACHING, voiceError: null }
+    case 'sample': return { ...s, voiceMode: 'synthetic', voiceError: a.error ?? null, transcript: [], scores: structuredClone(EMPTY_SCORES), whisper: null }
     case 'calibrated':     return { ...s, call: 'live' }
     case 'voice_mode':     return { ...s, voiceMode: a.mode, voiceError: a.error ?? null }
     case 'score_tile':     return { ...s, scores: { ...s.scores, [a.id]: a.score } }
@@ -148,20 +150,16 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
     const cur = stateRef.current
     const transcript = cur.transcript
     const persona = cur.persona
-    const usingLive = cur.voiceMode === 'live' && transcript.length > 0
+    const usingLive = cur.voiceMode === 'live' && transcript.some((line) => line.who === 'user')
 
+    const unavailable = (message: string) => {
+      dispatch({ type: 'voice_mode', mode: cur.voiceMode === 'live' ? 'live' : 'synthetic', error: message })
+      dispatch({ type: 'final_scores', scores: structuredClone(EMPTY_SCORES), moment: { time: '—', text: message }, coaching: [] })
+    }
     if (!usingLive) {
-      // No real conversation happened — just resolve to the canned scorecard.
-      // Keep a small delay so the scoring state is briefly visible (UX polish).
-      setTimeout(
-        () => dispatch({
-          type: 'final_scores',
-          scores: SYNTHETIC_FINAL,
-          moment: DEFAULT_MOMENT,
-          coaching: DEFAULT_COACHING,
-        }),
-        700,
-      )
+      if (cur.voiceMode === 'synthetic' && transcript.length > 0) {
+        dispatch({ type: 'final_scores', scores: SYNTHETIC_FINAL, moment: DEFAULT_MOMENT, coaching: DEFAULT_COACHING })
+      } else unavailable('No conversation was captured. Start another roleplay to receive feedback.')
       return
     }
 
@@ -183,19 +181,9 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
           moment: full.moment,
           coaching: full.coaching,
         }),
-        error: () => dispatch({
-          type: 'final_scores',
-          scores: SYNTHETIC_FINAL,
-          moment: DEFAULT_MOMENT,
-          coaching: DEFAULT_COACHING,
-        }),
+        error: () => unavailable('Scoring is temporarily unavailable. Your captured transcript is preserved below.'),
       },
-    ).catch(() => dispatch({
-      type: 'final_scores',
-      scores: SYNTHETIC_FINAL,
-      moment: DEFAULT_MOMENT,
-      coaching: DEFAULT_COACHING,
-    }))
+    ).catch(() => unavailable('Scoring is temporarily unavailable. Your captured transcript is preserved below.'))
   }, [])
 
   useEffect(() => {
@@ -292,19 +280,19 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
   useEffect(() => {
     if (state.call !== 'live') return
 
-    // Run the synthetic timeline for score tiles + whisper drops in every
-    // mode. In LIVE voice mode we suppress its transcript pushes so the
-    // real conversation (mic ↔ Grok) is the only transcript shown.
-    engine.current = new SyntheticEngine(
-      {
-        onScore:      (id, score) => dispatch({ type: 'score_tile', id, score }),
-        onTranscript: (line)      => dispatch({ type: 'transcript', line }),
-        onWhisper:    (w)         => dispatch({ type: 'whisper', whisper: w }),
-        onCallEnd:    (final)     => dispatch({ type: 'final_scores', scores: final }),
-      },
-      { skipTranscript: !synthetic },
-    )
-    engine.current.start()
+    // Scripted samples are only used in explicitly labeled sample mode.
+    const startSample = (error?: string) => {
+      if (cancelled) return
+      dispatch({ type: 'sample', error })
+      engine.current?.stop()
+      engine.current = new SyntheticEngine({
+        onScore: (id, score) => dispatch({ type: 'score_tile', id, score }),
+        onTranscript: (line) => dispatch({ type: 'transcript', line }),
+        onWhisper: (whisper) => dispatch({ type: 'whisper', whisper }),
+        onCallEnd: (scores) => dispatch({ type: 'final_scores', scores }),
+      })
+      engine.current.start()
+    }
 
     // If the server reports live mode AND we have a custom-config (or persona), try real voice.
     let cancelled = false
@@ -321,7 +309,7 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
           const tok = await mintToken(systemPrompt)
           if (cancelled) return
           if (tok.mode !== 'live' || !tok.value) {
-            dispatch({ type: 'voice_mode', mode: 'synthetic' })
+            startSample('Live service unavailable. This is a scripted sample.')
             return
           }
           const session = new VoiceSession({
@@ -331,7 +319,7 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
             onAssistantText: (text, t) => dispatch({ type: 'transcript', line: { who: 'buyer', t, text } }),
             onUserSpeaking: (a) => dispatch({ type: 'voice_activity', user: a }),
             onAssistantSpeaking: (a) => dispatch({ type: 'voice_activity', ai: a }),
-            onError:  (err) => dispatch({ type: 'voice_mode', mode: 'synthetic', error: err }),
+            onError: (err) => { session.stop(); startSample(err) },
             onClose:  () => {},
           })
           voice.current = session
@@ -343,11 +331,11 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
           })
           if (cancelled) session.stop()
         } catch (err) {
-          if (!cancelled) dispatch({ type: 'voice_mode', mode: 'synthetic', error: (err as Error).message })
+          if (!cancelled) { voice.current?.stop(); startSample((err as Error).message) }
         }
       })()
     } else {
-      dispatch({ type: 'voice_mode', mode: 'synthetic' })
+      startSample()
     }
 
     // Toggle waveform speakers in synthetic mode for visual liveliness.

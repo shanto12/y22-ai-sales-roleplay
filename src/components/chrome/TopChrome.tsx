@@ -47,9 +47,9 @@ export function TopChrome({
         </button>
       </nav>
       <div className="chrome-right">
-        <span className="live-chip" title={isLive ? 'Live xAI Voice Agent connected' : 'Synthetic mode — XAI_API_KEY not set on server'}>
+        <span className="live-chip" title={isLive ? 'Live voice provider configured; a conversation starts only when you begin' : 'Synthetic mode — XAI_API_KEY not set on server'}>
           <span className="dot" style={!isLive ? { background: 'var(--amber)', boxShadow: '0 0 0 2px rgba(245,165,36,0.18)' } : undefined} />
-          <span>{isLive ? 'Live' : 'Synthetic'}</span>
+          <span>{isLive ? 'Voice ready' : 'Sample mode'}</span>
           <span style={{ color: 'var(--hairline-2)' }}>·</span>
           <span className="model">{health.model}</span>
         </span>

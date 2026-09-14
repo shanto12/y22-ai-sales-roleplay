@@ -5,11 +5,10 @@ export function SyntheticBanner() {
     <div className="synthetic-banner" role="status">
       <Activity size={14} />
       <span>
-        <strong>Live voice unavailable</strong> — playing canned roleplay. Add{' '}
-        <span className="key">XAI_API_KEY</span> to enable Grok.
+        <strong>Sample mode</strong> — explore a scripted roleplay with illustrative coaching.
       </span>
       <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-mute)', fontFamily: 'JetBrains Mono, monospace' }}>
-        fallback · 5 canned scenarios loaded
+        No microphone needed
       </span>
     </div>
   )

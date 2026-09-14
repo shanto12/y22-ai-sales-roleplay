@@ -3,10 +3,10 @@
 // Self-contained per AGENTS.md (no shared imports).
 
 export default async () => {
-  const hasKey = !!process.env.XAI_API_KEY
-  const model = process.env.GROK_VOICE_MODEL || 'grok-voice-think-fast-1.0'
-  const scoringModel = process.env.SCORING_MODEL || 'grok-3'
-  const version = process.env.COMMIT_REF || process.env.NETLIFY_COMMIT || 'dev'
+  const hasKey = !!Netlify.env.get('XAI_API_KEY')
+  const model = Netlify.env.get('GROK_VOICE_MODEL') || 'grok-voice-think-fast-1.0'
+  const scoringModel = Netlify.env.get('SCORING_MODEL') || 'grok-3'
+  const version = Netlify.env.get('COMMIT_REF') || Netlify.env.get('NETLIFY_COMMIT') || 'dev'
 
   const body = {
     mode: hasKey ? 'live' : 'synthetic',
@@ -14,11 +14,12 @@ export default async () => {
     model,
     scoringModel,
     capabilities: {
-      voice:   { live: hasKey, p50_ms: hasKey ? 320 : 0 },
-      scoring: { live: hasKey, p50_ms: hasKey ? 480 : 0 },
-      persona: { live: hasKey, cold_p50_ms: hasKey ? 1400 : 0 },
+      voice:   { live: hasKey, p50_ms: 0 },
+      scoring: { live: hasKey, p50_ms: 0 },
+      persona: { live: hasKey, cold_p50_ms: 0 },
     },
     syntheticReady: true,
+    statusBasis: 'configuration only; no provider request or latency measurement',
     version,
   }
 

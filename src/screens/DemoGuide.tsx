@@ -58,19 +58,19 @@ export function DemoGuide({ health, onOpenHelp }: { health: HealthResponse; onOp
               title="Voice loop"
               meta={`POST /api/mint-token + WSS /v1/realtime · ${health.model}`}
               status={voice ? 'ok' : 'warn'}
-              text={voice ? `200 OK · ${health.capabilities.voice.p50_ms}ms p50` : 'synthetic — no XAI_API_KEY'}
+              text={voice ? 'Provider configured · verify in a call' : 'synthetic — no XAI_API_KEY'}
             />
             <HealthRow
               title="Behavior scoring"
               meta={`POST /api/score · 6-tile rubric · ${health.scoringModel}`}
               status={score ? 'ok' : 'warn'}
-              text={score ? `200 OK · ${health.capabilities.scoring.p50_ms}ms p50` : 'synthetic timeline'}
+              text={score ? 'Provider configured · scored per conversation' : 'synthetic timeline'}
             />
             <HealthRow
               title="Persona generation"
               meta="POST /api/persona · from custom-buyer form"
               status={persona ? 'ok' : 'warn'}
-              text={persona ? `200 OK · cold-start ${health.capabilities.persona.cold_p50_ms}ms` : 'local builder'}
+              text={persona ? 'Provider configured' : 'local builder'}
             />
             <HealthRow
               title="Synthetic fallback"

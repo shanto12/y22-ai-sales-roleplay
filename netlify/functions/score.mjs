@@ -50,9 +50,9 @@ export default async (req) => {
   const persona = body.persona && typeof body.persona === 'object' ? body.persona : { name: 'Buyer', title: '—', difficulty: 'hard' }
   const isFinal = !!body.final
 
-  const apiKey = process.env.XAI_API_KEY
-  const baseUrl = process.env.XAI_API_BASE_URL || 'https://api.x.ai/v1'
-  const model = process.env.SCORING_MODEL || 'grok-3'
+  const apiKey = Netlify.env.get('XAI_API_KEY')
+  const baseUrl = Netlify.env.get('XAI_API_BASE_URL') || 'https://api.x.ai/v1'
+  const model = Netlify.env.get('SCORING_MODEL') || 'grok-3'
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -70,15 +70,17 @@ export default async (req) => {
         for (const b of BEHAVIORS) send('tile', { id: b.id, score: SYNTHETIC_FINAL[b.id] })
         send('moment', SYNTHETIC_MOMENT)
         send('coaching', { bullets: SYNTHETIC_COACHING })
-        send('result', { scores: SYNTHETIC_FINAL, moment: SYNTHETIC_MOMENT, coaching: SYNTHETIC_COACHING })
+        send('result', { scores: SYNTHETIC_FINAL, moment: SYNTHETIC_MOMENT, coaching: SYNTHETIC_COACHING, mode: 'synthetic' })
       }
 
       try {
-        if (!apiKey || transcript.length === 0) {
+        if (!apiKey) {
           fallback()
           send('done', {})
           return
         }
+
+        if (!transcript.some(line => line.who === 'user' && typeof line.text === 'string' && line.text.trim())) throw new Error('No rep speech captured')
 
         const sys = [
           'You score sales-rep performance on six behaviors using a 0-5 rubric:',
@@ -87,7 +89,8 @@ export default async (req) => {
           '3. value (Value Framing) - did the rep tie features to the buyer\'s stated metric?',
           '4. multi (Multithreading) - did the rep ask for or name another stakeholder?',
           '5. next (Next-Step Specificity) - calendar hold + named attendee + agenda?',
-          '6. tlr (Talk:Listen Ratio) - was the rep <=55% talk by minute 2?',
+          '6. tlr (Talk:Listen Ratio) - estimate balance from transcript words only; do not invent audio timings.',
+          'Never invent prior calls, team averages, benchmark deltas or statements missing from the transcript. Set delta to null.',
           '',
           'Return ONLY a JSON object with this exact shape:',
           '{',
@@ -125,7 +128,6 @@ export default async (req) => {
         })
 
         if (!r.ok) {
-          fallback()
           send('error', { message: `upstream_${r.status}` })
           send('done', {})
           return
@@ -136,11 +138,13 @@ export default async (req) => {
         const parsed = safeParseJSON(text)
 
         if (!parsed || !parsed.scores) {
-          fallback()
-          send('done', {})
-          return
+          throw new Error('Scoring returned an invalid response')
         }
 
+        for (const b of BEHAVIORS) {
+          const raw = parsed.scores[b.id]
+          if (!raw || !Number.isFinite(raw.score) || typeof raw.rationale !== 'string') throw new Error('Scoring returned incomplete behavior evidence')
+        }
         const normalized = {}
         for (const b of BEHAVIORS) {
           const raw = parsed.scores[b.id] ?? parsed[b.id]
@@ -157,20 +161,19 @@ export default async (req) => {
 
         const moment = (parsed.moment && typeof parsed.moment.time === 'string' && typeof parsed.moment.text === 'string')
           ? { time: parsed.moment.time.slice(0, 8), text: parsed.moment.text.slice(0, 240) }
-          : SYNTHETIC_MOMENT
+          : { time: '—', text: 'No turning point was identified in this conversation.' }
         send('moment', moment)
 
         const coaching = Array.isArray(parsed.coaching)
           ? parsed.coaching.filter((s) => typeof s === 'string' && s.trim().length > 0).slice(0, 3).map((s) => s.slice(0, 280))
-          : SYNTHETIC_COACHING
-        const coachingFinal = coaching.length === 3 ? coaching : SYNTHETIC_COACHING
+          : []
+        const coachingFinal = coaching
         send('coaching', { bullets: coachingFinal })
 
         send('result', { scores: normalized, moment, coaching: coachingFinal })
         send('done', {})
       } catch (err) {
         send('error', { message: err && err.message ? err.message : 'unknown' })
-        fallback()
         send('done', {})
       } finally {
         clearInterval(heartbeat)

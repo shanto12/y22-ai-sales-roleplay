@@ -52,6 +52,15 @@ export function Configurator({
 
   return (
     <>
+      <section className="studio-hero" aria-label="Sales practice studio">
+        <div>
+          <div className="studio-eyebrow">THE CONVERSATION LAB / Y22</div>
+          <h1>Better conversations.<br /><em>Before the real call.</em></h1>
+          <p>Meet your toughest buyer. Practice the objection. Leave with a clearer next move.</p>
+          <div className="studio-features"><span>01 / Voice roleplay</span><span>02 / In-call coaching</span><span>03 / Behavior feedback</span></div>
+        </div>
+        <div className="studio-orb" aria-hidden="true"><div className="orb-ring" /><div className="orb-core">Y<span>22</span></div><span className="orb-caption">PRACTICE. REFLECT. REPEAT.</span></div>
+      </section>
       {!introDismissed && <IntroCard onDismiss={dismissIntro} />}
       <div className={`config-shell ${customExpanded ? 'config-expanded' : 'config-presets-only'}`}>
         <div className="preset-column">

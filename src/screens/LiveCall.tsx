@@ -5,7 +5,6 @@ import { ScoreTile } from '../components/shared/ScoreTile.tsx'
 import { CalibratingOverlay } from '../components/shared/CalibratingOverlay.tsx'
 import { ScoringOverlay } from '../components/shared/ScoringOverlay.tsx'
 import { BEHAVIORS } from '../data/behaviors.ts'
-import { WHISPER_HISTORY } from '../data/synthetic-call.ts'
 import type { Persona, ScoreMap, TranscriptLine, WhisperPrompt } from '../types.ts'
 
 export function LiveCall({
@@ -33,7 +32,7 @@ export function LiveCall({
   const remainingClass = remaining <= 30 ? 'fg-coral' : remaining <= 60 ? 'fg-amber' : 'fg-green'
 
   const [whisperState, setWhisperState] = useState<'visible' | 'used' | 'dismissed' | 'held'>('visible')
-  const [history, setHistory] = useState<string[]>(WHISPER_HISTORY)
+  const [history, setHistory] = useState<string[]>([])
   const [lastWhisperText, setLastWhisperText] = useState<string | undefined>(undefined)
   const [resolvedText, setResolvedText] = useState<string | undefined>(undefined)
 
@@ -94,7 +93,7 @@ export function LiveCall({
         <div className="wave-side l">
           <div className="who"><span className="dot" /> You · mic</div>
           <Waveform side="l" active={userActive} count={56} />
-          <div className="voice-tag">input · 48 kHz · –11.2 dB</div>
+          <div className="voice-tag">{voiceMode === 'live' ? 'Microphone input · activity visualization' : 'Scripted sample visualization'}</div>
         </div>
 
         <div className="timer-pill" title="Calls auto-end at 5:00 to control xAI voice costs">
@@ -116,7 +115,7 @@ export function LiveCall({
       <div className="call-row-b">
         <div className="row-head">
           <div className="title"><span className="num">01</span> Behavior Scorecard · live</div>
-          <div className="mono-mute" style={{ fontSize: 11 }}>updated 0.4s ago · 6 of 6 behaviors</div>
+          <div className="mono-mute" style={{ fontSize: 11 }}>{voiceMode === 'live' ? 'Updated from conversation evidence' : 'Illustrative sample scores'}</div>
         </div>
         <div className="tiles-grid" aria-live="polite">
           {BEHAVIORS.map((b) => <ScoreTile key={b.id} b={b} score={scores[b.id]} />)}
@@ -128,7 +127,7 @@ export function LiveCall({
           <div className="col-head">
             <span>
               <span className="num">02</span>
-              Live transcript
+              {voiceMode === 'live' ? 'Live transcript' : 'Sample transcript'}
             </span>
             <span className="mono-mute" style={{ fontSize: 10 }}>auto-scroll on</span>
           </div>
@@ -169,7 +168,7 @@ export function LiveCall({
                     <button className="pill-btn use" onClick={handleUse} data-testid="whisper-use">Use</button>
                     <button className="pill-btn" onClick={handleDismiss}>Dismiss</button>
                     <button className="pill-btn" style={{ marginLeft: 'auto' }} onClick={handleHold}>
-                      Hold <span className="kbd" style={{ marginLeft: 4 }}>W</span>
+                      Hold
                     </button>
                   </div>
                 </div>
@@ -179,7 +178,7 @@ export function LiveCall({
                 <div className="resolved-label">
                   {whisperState === 'used' && '✓ Whisper used — keep going'}
                   {whisperState === 'dismissed' && '✕ Whisper dismissed'}
-                  {whisperState === 'held' && '⏸ Held — will surface again at the next pause'}
+                  {whisperState === 'held' && '⏸ Held in this call’s history'}
                 </div>
               </div>
             ) : (

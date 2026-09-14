@@ -11,6 +11,7 @@ import { useHealth } from './hooks/useHealth.ts'
 import { useDeepLink } from './hooks/useDeepLink.ts'
 import { useCallMachine } from './hooks/useCallMachine.ts'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.ts'
+import { buildPersona } from './data/persona-builder.ts'
 import { PRESETS } from './data/presets.ts'
 import { SYNTHETIC_FINAL } from './lib/synthetic-engine.ts'
 import type { AppTab, CustomConfig, Persona } from './types.ts'
@@ -28,8 +29,13 @@ function App() {
   const { state, selectPersona, start, end, reset, forceState } = useCallMachine(synthetic, { customConfig: custom })
 
   const persona: Persona = useMemo(
-    () => PRESETS.find((p) => p.id === presetId) ?? PRESETS[0],
-    [presetId],
+    () => {
+      if (presetId !== 'custom') return PRESETS.find((p) => p.id === presetId) ?? PRESETS[0]
+      const built = buildPersona(custom)
+      const [title, company] = built.title.split(' · ')
+      return { id: 'custom', name: built.name, full_name: built.name, monogram: built.monogram, title, company, profile: built.pains.join(' · '), difficulty: custom.difficulty, industry: custom.industry, title_key: custom.title, objection: custom.objection, pains: built.pains, objection_line: built.objection }
+    },
+    [presetId, custom],
   )
   useEffect(() => { selectPersona(persona) }, [persona, selectPersona])
 
@@ -80,9 +86,9 @@ function App() {
         {tab === 'roleplay' && (state.call === 'idle') && (
           <Configurator
             selectedPreset={presetId}
-            setSelectedPreset={setPresetId}
+            setSelectedPreset={(id) => { const p = PRESETS.find((item) => item.id === id); setPresetId(id); if (p) setCustom({ industry: p.industry, title: p.title_key, difficulty: p.difficulty, objection: p.objection }) }}
             custom={custom}
-            setCustom={setCustom}
+            setCustom={(config) => { setCustom(config); setPresetId('custom') }}
             onStart={start}
           />
         )}
@@ -111,7 +117,9 @@ function App() {
             moment={state.moment}
             coaching={state.coaching}
             transcript={state.transcript}
-            onTryHarder={() => { setCustom({ ...custom, difficulty: 'hard' }); reset(); start() }}
+            voiceMode={state.voiceMode}
+            error={state.voiceError}
+            onTryHarder={() => { setCustom({ ...custom, difficulty: 'hard' }); setPresetId('custom'); reset() }}
             onAnother={() => reset()}
           />
         )}

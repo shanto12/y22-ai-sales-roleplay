@@ -84,6 +84,7 @@ export async function streamScore(
     body: JSON.stringify({ transcript, persona, final }),
   })
   if (!r.ok || !r.body) throw new Error(`score ${r.status}`)
+  let completed = false
   await parseSSEEvents(r.body, (event, data) => {
     if (event === 'tile' && on.tile) {
       const d = data as { id: string; score: ScoreMap[keyof ScoreMap] }
@@ -94,12 +95,15 @@ export async function streamScore(
       const d = data as { bullets: string[] }
       on.coaching(Array.isArray(d?.bullets) ? d.bullets : [])
     } else if (event === 'result' && on.result) {
+      completed = true
       on.result(data as ScoreResult)
     } else if (event === 'error' && on.error) {
       const d = data as { message?: string }
+      completed = true
       on.error(d?.message ?? 'unknown')
     }
   })
+  if (final && !completed) throw new Error('Scoring ended without a result')
 }
 
 /**

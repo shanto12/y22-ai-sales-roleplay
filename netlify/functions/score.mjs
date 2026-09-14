@@ -19,26 +19,6 @@ const BEHAVIORS = [
   { id: 'tlr',       name: 'Talk:Listen Ratio' },
 ]
 
-const SYNTHETIC_FINAL = {
-  discovery: { score: 4, band: 'green', rationale: 'Strong open: asked what changed in budget cycle and who else owns the number.', delta: '+0.4' },
-  objection: { score: 4, band: 'green', rationale: 'On the ROI pushback you reframed (90-day payback) before discounting.', delta: '+0.7' },
-  value:     { score: 4, band: 'green', rationale: 'Mapped the workflow back to her stated 30% efficiency target.', delta: '+0.3' },
-  multi:     { score: 3, band: 'amber', rationale: 'Got CRO name late. Never asked for an intro to ops or finance.', delta: '–0.6' },
-  next:      { score: 4, band: 'green', rationale: 'Closed with a Wed 2pm hold + agenda + pre-read. Specific.', delta: '+0.5' },
-  tlr:       { score: 3, band: 'amber', rationale: 'Final ratio 58/42. Improved after minute 2 once you started asking.', delta: '–0.2' },
-}
-
-const SYNTHETIC_MOMENT = {
-  time: '00:52',
-  text: 'when she said "we already have a vendor", you reframed instead of discounting.',
-}
-
-const SYNTHETIC_COACHING = [
-  '**When she challenged ROI**, lead with the 90-day payback line **before any discount.**',
-  '**Multithread earlier** — ask for the CRO\'s name in the discovery turn, not the close.',
-  '**Cut your talk:listen** to 50/50 before minute 2. Ask, then count to three.',
-]
-
 export default async (req) => {
   if (req.method !== 'POST') {
     return new Response('method_not_allowed', { status: 405 })
@@ -66,19 +46,8 @@ export default async (req) => {
         6000,
       )
 
-      const fallback = () => {
-        for (const b of BEHAVIORS) send('tile', { id: b.id, score: SYNTHETIC_FINAL[b.id] })
-        send('moment', SYNTHETIC_MOMENT)
-        send('coaching', { bullets: SYNTHETIC_COACHING })
-        send('result', { scores: SYNTHETIC_FINAL, moment: SYNTHETIC_MOMENT, coaching: SYNTHETIC_COACHING, mode: 'synthetic' })
-      }
-
       try {
-        if (!apiKey) {
-          fallback()
-          send('done', {})
-          return
-        }
+        if (!apiKey) throw new Error('Live scoring is not configured')
 
         if (!transcript.some(line => line.who === 'user' && typeof line.text === 'string' && line.text.trim())) throw new Error('No rep speech captured')
 
@@ -116,6 +85,7 @@ export default async (req) => {
 
         const r = await fetch(`${baseUrl}/responses`, {
           method: 'POST',
+          signal: AbortSignal.timeout(45000),
           headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
           body: JSON.stringify({
             model,

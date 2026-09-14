@@ -16,3 +16,9 @@ test('empty live transcript is unavailable, not a sample result', async () => {
  const r=await score(new Request('https://test/api/score',{method:'POST',body:JSON.stringify({transcript:[],final:true})}))
  const body=await r.text();assert.match(body,/event: error/);assert.doesNotMatch(body,/event: result/)
 })
+
+test('missing provider key cannot silently substitute sample grades', async () => {
+ globalThis.Netlify = { env: { get: () => undefined } }
+ const r=await score(new Request('https://test/api/score',{method:'POST',body:JSON.stringify({transcript,final:true})}))
+ const body=await r.text();assert.match(body,/event: error/);assert.doesNotMatch(body,/event: result|event: tile/)
+})

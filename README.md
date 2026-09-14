@@ -1,82 +1,41 @@
-# Y22 Roleplay — voice-driven AI sales-roleplay cockpit
+# Y22 Conversation Lab
 
-Live voice-driven AI buyer simulator with a real-time **6-tile behavior scorecard**, mid-call **Whisper coaching**, and a post-call replay clip pinpointing the moment the deal turned. Built on the [xAI Grok Voice Agent API](https://x.ai/news/grok-voice-agent-api) (sub-1s time-to-first-audio, OpenAI Realtime-compatible).
+A browser voice-roleplay studio for practicing discovery, objections, stakeholder alignment, and next steps with a fictional AI buyer.
 
-> Demo for the **Y22 AI** Founding AI Engineer (Part-Time) role.
-> The audience is a sales-training founder, not an ML researcher — the UI talks behaviors, calls, and reps, not tokens.
+[Live application](https://y22-ai-sales-roleplay.netlify.app) · [Source](https://github.com/shanto12/y22-ai-sales-roleplay)
 
-## Live demo
+![Conversation Lab](docs/portfolio-hero.png)
 
-- App: https://y22-ai-sales-roleplay.netlify.app
-- Source: this repo
+## What the application does
 
-## Highlights
+Choose a preset buyer or configure industry, title, difficulty and objection style. A server-issued ephemeral xAI token connects browser microphone PCM audio to a real-time AI buyer. Captured conversation text drives rolling behavior scoring, optional in-call coaching and a final six-behavior scorecard. Review the transcript and save coaching points for the current session.
 
-- **Live voice roleplay** in the browser, no phone setup. WebSocket → `wss://api.x.ai/v1/realtime`, ephemeral client-secret minted server-side.
-- **6 behavior tiles** light up live: Discovery Depth · Objection Acknowledgement · Value Framing · Multithreading · Next-Step Specificity · Talk:Listen Ratio.
-- **Whisper coaching** drops a single tactical line mid-call when the buyer triggers a known objection pattern.
-- **Post-call scorecard** with a "moment the deal turned" replay, 3 coaching bullets, and a delta vs. top-10% baseline.
-- **Prompt Lab** showing 3 versioned persona prompts with eval scores against a golden objection set and regression deltas — directly answers the JD’s "prompt versioning + temperature optimization" line.
-- **Synthetic-deterministic fallback** so a recruiter without keys still gets the full demo.
+The September2026 refresh repairs the provider credential, current Responses API contract, preset/custom consistency, audio-context startup and cumulative transcript handling. Live scores are derived from captured speech; missing credentials, provider errors and incomplete model responses surface as unavailable feedback. They never silently become sample grades.
 
 ## Architecture
 
-```
-┌────────────────────┐                      ┌─────────────────────────┐
-│ Browser (React/TS) │ ── WS realtime ────▶ │  xAI Grok Voice Agent   │
-│  Configurator      │                      │  grok-voice-think-fast  │
-│  LiveCall + tiles  │ ◀── audio + text ─── │                         │
-│  Whisper / Score   │                      └─────────────────────────┘
-│  Scorecard / Lab   │
-└─────────┬──────────┘
-          │ /api/mint-token  /api/persona  /api/score  /api/health
-          ▼
-┌──────────────────────────────────┐
-│  Netlify Functions (Node ESM)    │
-│  - mint-token: ephemeral secret  │
-│  - persona: SSE Grok responses   │
-│  - score: SSE 6-tile rubric      │
-│  - health: mode + capabilities   │
-└──────────────────────────────────┘
-```
+- React19, TypeScript and Vite for the responsive studio.
+- Browser AudioWorklet capture and WebSocket audio transport to xAI; provider keys stay in Netlify Functions.
+- Netlify Functions for short-lived voice tokens and streamed scoring/persona requests; scoring uses an explicit nonreasoning model and a bounded timeout.
+- In-memory session state and transcript-review UI. This deployment has no account system or persistent customer call storage.
+- Unit/component tests and backend failure-path regression tests; CSP, HSTS and restricted browser permissions.
 
-### Why this design
-- **Server-side secret boundary.** `XAI_API_KEY` never leaves the Netlify Function. The browser only ever sees a 5–10 minute ephemeral client secret.
-- **All LLM-backed endpoints stream SSE** — Netlify’s edge proxy kills sync functions that don’t emit data for ~30s; Grok responses for scoring routinely take 5–15s.
-- **Self-contained function files** (no shared `_*.mjs` imports) per a known Netlify-bundler pitfall.
-- **Synthetic mode is first-class.** When `XAI_API_KEY` is absent, every Function returns `mode: synthetic` with HTTP 200 and the frontend plays a canned timeline — recruiters can demo without keys.
+## Evidence and boundaries
 
-## Local dev
+Production checks on September14,2026 verified token issuance, genuine two-way provider voice with synthetic microphone input, relevant buyer responses, final AI scoring/coaching, desktop controls and responsive layouts. The release artifact records exact source/deploy IDs and distinguishes automated Chrome from the real-user-profile manual check, which remained pending when that browser connection was unavailable.
+
+The public personas are fictional. A clearly labeled scripted sample is available when voice initialization fails. Prompt Lab is an illustrative comparison of example prompts and sample metrics; it does not run an evaluation harness or change the live voice prompt. Transcript review does not replay recorded audio. Coaching bookmarks last for the session. No external CRM, telephone call, customer messaging, or sales-performance claims are made.
+
+## Development
 
 ```bash
-npm install
-cp .env.example .env
-# add your xAI key in .env, then:
-npm run dev          # Vite at http://localhost:5173
-npx netlify dev      # serves both Vite + the Netlify Functions on :8888
+npm ci
+npm run dev
+npm run verify
+node --test tests/scoring.test.mjs
+npm audit --omit=dev
 ```
 
-`npm run verify` runs `lint + typecheck + test + build` — all four must pass before deploy.
+Netlify Functions require server-side `XAI_API_KEY`; `SCORING_MODEL` can select the text model. Use Netlify development tooling for local functions. Browser-only development uses clearly labeled samples when functions are unavailable.
 
-## Project layout
-
-```
-src/
-  App.tsx               state machine + routing
-  data/                 personas, behaviors, prompt versions, synthetic timeline
-  lib/                  voice-session, synthetic-engine, score-mapper, api client
-  hooks/                useHealth, useDeepLink, useCallMachine
-  components/           Waveform, ScoreTile, TopChrome, SyntheticBanner, …
-  screens/              Configurator, LiveCall, Scorecard, PromptLab, DemoGuide
-netlify/functions/
-  health.mjs  mint-token.mjs  persona.mjs  score.mjs
-e2e/golden.spec.ts      Playwright happy-path
-```
-
-## Synthetic data
-
-All transcripts, personas, scores, and prompt versions are synthetic. Provenance is documented in `src/data/sources.ts`. No real call recordings, customer names, or PII are anywhere in this codebase.
-
-## License
-
-MIT.
+This is an independent demonstration built by Shanto Mathew, not affiliated with or endorsed by Y22 or xAI. No customer data is included.

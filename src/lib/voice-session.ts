@@ -19,7 +19,7 @@ import type { TranscriptLine } from '../types.ts'
 export interface VoiceSessionEvents {
   onConnecting: () => void
   onConnected: () => void
-  onUserText: (text: string, t: string) => void
+  onUserText: (text: string, t: string, id?: string) => void
   onAssistantText: (text: string, t: string) => void
   onUserSpeaking: (active: boolean) => void
   onAssistantSpeaking: (active: boolean) => void
@@ -217,7 +217,7 @@ export class VoiceSession {
 
   private handleEvent(raw: unknown) {
     if (typeof raw !== 'string') return
-    let msg: { type?: string; delta?: string; transcript?: string; audio?: string; item?: { transcript?: string }; error?: { message?: string } }
+    let msg: { item_id?: string; type?: string; delta?: string; transcript?: string; audio?: string; item?: { transcript?: string }; error?: { message?: string } }
     try { msg = JSON.parse(raw) } catch { return }
     if (!msg?.type) return
 
@@ -246,7 +246,7 @@ export class VoiceSession {
       }
       case 'conversation.item.input_audio_transcription.completed': {
         const text = (msg.transcript ?? msg.item?.transcript ?? '').trim()
-        if (text) this.events.onUserText(text, this.elapsed())
+        if (text) this.events.onUserText(text, this.elapsed(), msg.item_id)
         break
       }
       case 'input_audio_buffer.speech_started': {

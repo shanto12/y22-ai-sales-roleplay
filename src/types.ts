@@ -57,6 +57,7 @@ export interface BuiltPersona {
 }
 
 export interface TranscriptLine {
+  id?: string
   t: string
   who: 'user' | 'buyer'
   text: string

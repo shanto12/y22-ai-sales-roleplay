@@ -4,6 +4,7 @@ import { VoiceSession } from '../lib/voice-session.ts'
 import { mintToken, streamScore, fetchWhisper, type MomentClip } from '../lib/api.ts'
 import { buildPersonaSystemPrompt } from '../data/persona-builder.ts'
 import type { BehaviorId, CallState, CustomConfig, Persona, ScoreMap, Score, TranscriptLine, WhisperPrompt } from '../types.ts'
+import { mergeTranscript } from '../lib/transcript.ts'
 import { BEHAVIORS } from '../data/behaviors.ts'
 
 const DEFAULT_MOMENT: MomentClip = {
@@ -76,7 +77,7 @@ function reducer(s: State, a: Action): State {
     case 'calibrated':     return { ...s, call: 'live' }
     case 'voice_mode':     return { ...s, voiceMode: a.mode, voiceError: a.error ?? null }
     case 'score_tile':     return { ...s, scores: { ...s.scores, [a.id]: a.score } }
-    case 'transcript':     return { ...s, transcript: [...s.transcript, a.line] }
+    case 'transcript':     return { ...s, transcript: mergeTranscript(s.transcript, a.line) }
     case 'whisper':        return { ...s, whisper: a.whisper }
     case 'voice_activity': return { ...s, userActive: a.user ?? s.userActive, aiActive: a.ai ?? s.aiActive }
     case 'moment':         return { ...s, moment: a.moment }
@@ -315,7 +316,7 @@ export function useCallMachine(synthetic: boolean, opts?: { customConfig?: Custo
           const session = new VoiceSession({
             onConnecting: () => {},
             onConnected:  () => dispatch({ type: 'voice_mode', mode: 'live' }),
-            onUserText:   (text, t) => dispatch({ type: 'transcript', line: { who: 'user',  t, text } }),
+            onUserText: (text, t, id) => dispatch({ type: 'transcript', line: { who: 'user', t, text, id } }),
             onAssistantText: (text, t) => dispatch({ type: 'transcript', line: { who: 'buyer', t, text } }),
             onUserSpeaking: (a) => dispatch({ type: 'voice_activity', user: a }),
             onAssistantSpeaking: (a) => dispatch({ type: 'voice_activity', ai: a }),

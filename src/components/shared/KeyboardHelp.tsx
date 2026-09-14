@@ -3,7 +3,6 @@ import { Modal } from './Modal.tsx'
 const SHORTCUTS: { keys: string[]; label: string; scope: string }[] = [
   { keys: ['Enter'],  label: 'Start roleplay',         scope: 'Configurator' },
   { keys: ['Esc'],    label: 'End call',               scope: 'Live call' },
-  { keys: ['W'],      label: 'Hold whisper for later', scope: 'Live call' },
   { keys: ['1'],      label: 'Roleplay tab',           scope: 'Anywhere' },
   { keys: ['2'],      label: 'Prompt Lab tab',         scope: 'Anywhere' },
   { keys: ['3'],      label: 'Demo Guide tab',         scope: 'Anywhere' },

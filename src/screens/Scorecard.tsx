@@ -85,7 +85,7 @@ export function Scorecard({
       <div>
         <div className="row-head">
           <div className="title"><span className="num">01</span> Final behavior breakdown</div>
-          <span className="mono-mute" style={{ fontSize: 11 }}>Illustrative comparison baseline · not team performance data</span>
+          <span className="mono-mute" style={{ fontSize: 11 }}>Six-behavior practice rubric · 0–5 per behavior</span>
         </div>
         <div className="tiles-grid">
           {BEHAVIORS.map((b) => <ScoreTileFinal key={b.id} b={b} score={scores[b.id]} />)}

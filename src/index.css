@@ -1585,3 +1585,5 @@ body { background:radial-gradient(ellipse at 75% 10%,#18342b 0,transparent 45%),
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 
 .config-shell.config-presets-only { grid-template-columns:minmax(0,1fr); }
+
+@media(max-width:620px) { .tabs .tab span { display:inline; } }

@@ -1,41 +1,92 @@
 # Y22 Conversation Lab
 
-A browser voice-roleplay studio for practicing discovery, objections, stakeholder alignment, and next steps with a fictional AI buyer.
+**Practice a difficult sales conversation with an AI buyer, then review the captured transcript and six-behavior coaching scorecard.** Built by [Shanto Mathew](https://github.com/shanto12) as a personal voice AI project.
 
-[Live application](https://y22-ai-sales-roleplay.netlify.app) · [Source](https://github.com/shanto12/y22-ai-sales-roleplay)
+[Open live application](https://y22-ai-sales-roleplay.netlify.app) · [Explore the voice transport](src/lib) · [Review scoring safeguards](tests/scoring.test.mjs)
 
-![Conversation Lab](docs/portfolio-hero.png)
+![Conversation Lab buyer selection and practice studio](docs/screenshots/conversation-lab.png)
 
-## What the application does
+## Review it in three minutes
 
-Choose a preset buyer or configure industry, title, difficulty and objection style. A server-issued ephemeral xAI token connects browser microphone PCM audio to a real-time AI buyer. Captured conversation text drives rolling behavior scoring, optional in-call coaching and a final six-behavior scorecard. Review the transcript and save coaching points for the current session.
+1. Choose a fictional buyer preset or configure industry, title, difficulty and objection style.
+2. Start a roleplay and allow microphone access. Ask discovery questions and respond to the buyer's objections.
+3. End the call to inspect six behavior scores, their rationales, a transcript insight and coaching suggestions.
+4. Review the transcript, bookmark coaching points for the current session, or practice the same persona at a harder setting.
 
-The September2026 refresh repairs the provider credential, current Responses API contract, preset/custom consistency, audio-context startup and cumulative transcript handling. Live scores are derived from captured speech; missing credentials, provider errors and incomplete model responses surface as unavailable feedback. They never silently become sample grades.
+Voice and scoring use real xAI model requests. If voice initialization fails, the interface explicitly labels its scripted sample and illustrative scores.
 
-## Architecture
+![Actual provider-scored synthetic voice test, showing a 21 out of 30 result](docs/screenshots/voice-scorecard.png)
 
-- React19, TypeScript and Vite for the responsive studio.
-- Browser AudioWorklet capture and WebSocket audio transport to xAI; provider keys stay in Netlify Functions.
-- Netlify Functions for short-lived voice tokens and streamed scoring/persona requests; scoring uses an explicit nonreasoning model and a bounded timeout.
-- In-memory session state and transcript-review UI. This deployment has no account system or persistent customer call storage.
-- Unit/component tests and backend failure-path regression tests; CSP, HSTS and restricted browser permissions.
+This screenshot shows one actual production voice test scored **21/30**, using synthetic microphone audio and a fictional buyer. It is an example output, not a sales-performance benchmark.
 
-## Evidence and boundaries
+## Engineering worth inspecting
 
-Production checks on September14,2026 verified token issuance, genuine two-way provider voice with synthetic microphone input, relevant buyer responses, final AI scoring/coaching, desktop controls and responsive layouts. The release artifact records exact source/deploy IDs and distinguishes automated Chrome from the real-user-profile manual check, which remained pending when that browser connection was unavailable.
+- **Realtime voice:** browser AudioWorklet capture sends microphone PCM audio over a WebSocket, using a server-issued ephemeral token.
+- **Conversation evidence:** provider transcript revisions are coalesced by item ID; captured text drives scoring and optional in-call coaching.
+- **Fail-closed scoring:** missing configuration, empty conversations, provider errors and incomplete model results display unavailable feedback rather than fabricated grades.
+- **Persona consistency:** preset and custom buyer configuration reaches the actual live conversation.
+- **Practical feedback UI:** six behaviors, rationales, transcript review and session-local coaching bookmarks, with responsive desktop/mobile layouts.
 
-The public personas are fictional. A clearly labeled scripted sample is available when voice initialization fails. Prompt Lab is an illustrative comparison of example prompts and sample metrics; it does not run an evaluation harness or change the live voice prompt. Transcript review does not replay recorded audio. Coaching bookmarks last for the session. No external CRM, telephone call, customer messaging, or sales-performance claims are made.
+## Architecture and state
 
-## Development
+```mermaid
+flowchart LR
+  UI[React practice studio] --> TOKEN[Netlify ephemeral-token function]
+  TOKEN --> VOICE[xAI realtime voice]
+  UI <-->|PCM audio and transcripts| VOICE
+  UI --> SCORE[Netlify scoring and coaching functions]
+  SCORE --> MODEL[xAI Responses API]
+  MODEL --> SCORE
+  SCORE --> UI
+```
 
-```bash
+| Layer | Implementation |
+|---|---|
+| Interface | React, TypeScript and Vite |
+| Voice | AudioWorklet capture, WebSocket transport and browser audio playback |
+| Hosted backend | Netlify Functions for ephemeral tokens, persona generation, scoring and coaching |
+| Models | `grok-voice-think-fast-1.0` for voice; `grok-4.20-0309-non-reasoning` is the current default text model |
+| State | In-memory call state, transcript and coaching bookmarks |
+| Persistence | No database, account system or persistent customer-call store |
+
+Provider keys stay server-side. The [score function](netlify/functions/score.mjs) bounds provider time and output; [call state](src/hooks/useCallMachine.ts) keeps live results separate from the scripted sample. [Transcript tests](src/lib/transcript.test.ts) cover repeated provider revisions.
+
+## Run locally
+
+Use a current Node.js LTS release and npm.
+
+```sh
+git clone https://github.com/shanto12/y22-ai-sales-roleplay.git
+cd y22-ai-sales-roleplay
 npm ci
 npm run dev
-npm run verify
+```
+
+Vite serves the interface; unavailable local functions result in the clearly labeled sample experience. For live voice and server functions, supply `XAI_API_KEY` securely to the local server environment and run:
+
+```sh
+npx netlify-cli dev
+```
+
+Optional server overrides are `GROK_VOICE_MODEL`, `SCORING_MODEL` and `XAI_API_BASE_URL`. Omit `SCORING_MODEL` to use the current code default above; the older `.env.example` lists a legacy override. Never put provider credentials in browser-exposed `VITE_` variables.
+
+## Verify the code
+
+```sh
+npm run lint
+npm run typecheck
+npm test -- --maxWorkers=1
 node --test tests/scoring.test.mjs
+npm run build
 npm audit --omit=dev
 ```
 
-Netlify Functions require server-side `XAI_API_KEY`; `SCORING_MODEL` can select the text model. Use Netlify development tooling for local functions. Browser-only development uses clearly labeled samples when functions are unavailable.
+These commands match the current package scripts. The standalone scoring regression suite verifies that provider failure, malformed output, incomplete grades, empty transcript and missing keys do not emit canned live results. No paid provider call is required for these unit/regression checks.
 
-This is an independent demonstration built by Shanto Mathew, not affiliated with or endorsed by Y22 or xAI. No customer data is included.
+September 2026 production review covered real two-way provider voice with synthetic microphone input, relevant buyer responses, final scoring, controls and responsive layouts. A separate real Chrome pass covered the interface. Physical microphone/speaker quality was not evaluated; these checks do not establish a subjective voice-quality rating.
+
+## Scope
+
+Prompt Lab compares illustrative prompts and sample metrics; it does not run a live evaluation service or change the active voice prompt. Transcript review does not replay an audio recording. Bookmarks last for the current session. The short live test did not retain the exact in-call coaching response body, so its screenshot tip attribution is not independently evidenced. No CRM connection, telephone call, customer message or peer-performance benchmark is claimed.
+
+This independent demonstration is not affiliated with or endorsed by Y22 or xAI. Personas and test conversations are fictional; no customer data is included.

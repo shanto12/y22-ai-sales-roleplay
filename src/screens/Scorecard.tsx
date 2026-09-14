@@ -37,7 +37,8 @@ export function Scorecard({
   const turnCount = transcriptLines.length
   const wordCount = transcriptLines.reduce((acc, l) => acc + l.text.split(/\s+/).length, 0)
 
-  if (error) return (
+  const feedbackUnavailable = error && (voiceMode !== 'synthetic' || transcript.length === 0)
+  if (feedbackUnavailable) return (
     <section className="panel" style={{ margin: 24, padding: 28 }} aria-label="Call scorecard">
       <h2>Feedback unavailable</h2><p role="status">{error}</p>
       <p className="mono-mute">No grade was assigned. {transcript.length} captured transcript turns are preserved in this session.</p>
@@ -48,14 +49,14 @@ export function Scorecard({
 
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }} role="region" aria-label="Call scorecard">
-      <div className="report-provenance" role="status">{error ? error : voiceMode === 'live' ? 'AI feedback from your captured conversation' : 'Scripted sample · scores and conversation are illustrative'}</div>
+      <div className="report-provenance" role="status">{voiceMode === 'live' ? 'AI feedback from your captured conversation' : 'Scripted sample · scores and conversation are illustrative'}</div>
       <div className="hero-strip">
         <div className="hero-total">
-          <div className="l">{error ? 'Feedback unavailable' : 'Final score'} · {persona.full_name}</div>
+          <div className="l">Final score · {persona.full_name}</div>
           <div className="v">
-            <span><span className="n">{error ? '—' : total}</span> <span className="max">/ 30</span></span>
+            <span><span className="n">{total}</span> <span className="max">/ 30</span></span>
             <span style={{ width: 1, height: 36, background: 'var(--hairline-2)' }} />
-            <span className="grade-letter">{error ? '—' : grade}</span>
+            <span className="grade-letter">{grade}</span>
           </div>
           <div className="grade">
             <span style={{ color: 'var(--text-mute)' }}>Practice target</span>

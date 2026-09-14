@@ -86,11 +86,11 @@ export function DemoGuide({ health, onOpenHelp }: { health: HealthResponse; onOp
           <ol style={{ paddingLeft: 0, listStyle: 'none', margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
               { t: 'Pick the CFO preset', s: 'Hardest persona. Shows objection handling, not happy-path discovery.' },
-              { t: 'Click Start Roleplay (or press Enter)', s: 'Mic calibrates for 1.2s, then live waveform engages.' },
+              { t: 'Click Start Roleplay (or press Enter)', s: 'Allow microphone access to begin a live buyer conversation.' },
               { t: 'Watch the 6-tile scorecard fill in', s: 'Each tile updates with a one-line LLM-judge rationale.' },
               { t: 'Use, dismiss, or hold the Whisper coaching', s: 'The pill that lights amber is your real-time copilot.' },
               { t: 'End call → land on Scorecard', s: 'Press Esc, or click End call. See the moment the deal turned and 3 coaching bullets.' },
-              { t: 'Open Prompt Lab', s: 'Show that personas are versioned + evaluated, not vibe-prompted.' },
+              { t: 'Open Prompt Lab', s: 'Compare illustrative prompt examples and inspect their differences; live versioning and evaluation are roadmap features.' },
             ].map((s, i) => (
               <li key={i} style={{ display: 'flex', gap: 14, padding: 12, border: '1px solid var(--hairline)', borderRadius: 6, background: 'var(--card)' }}>
                 <div className="mono" style={{ fontSize: 12, color: 'var(--green)', width: 28 }}>0{i + 1}</div>
@@ -110,7 +110,7 @@ export function DemoGuide({ health, onOpenHelp }: { health: HealthResponse; onOp
 `}<span className="cmt">{`# Required for live voice. Without it, Y22 falls back to canned mode.
 `}</span><span className="var">XAI_API_KEY</span>={`            `}<span className="val">sk-xai-***</span>{`
 `}<span className="var">GROK_VOICE_MODEL</span>={`       `}<span className="val">grok-voice-think-fast-1.0</span>{`
-`}<span className="var">SCORING_MODEL</span>={`          `}<span className="val">grok-3</span>{`
+`}<span className="var">SCORING_MODEL</span>={`          `}<span className="val">grok-4.20-0309-non-reasoning</span>{`
 
 `}<span className="cmt">{`# Optional`}</span>{`
 `}<span className="var">XAI_API_BASE_URL</span>={`     `}<span className="val">https://api.x.ai/v1</span>

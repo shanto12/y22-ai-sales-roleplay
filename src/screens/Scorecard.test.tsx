@@ -23,6 +23,19 @@ const baseProps = {
 }
 
 describe('<Scorecard/>', () => {
+  it('never displays numeric grades for failed live scoring', () => {
+    render(<Scorecard {...baseProps} voiceMode="live" error="Provider unavailable" />)
+    expect(screen.getByText('Feedback unavailable')).toBeInTheDocument()
+    expect(screen.queryByText('22')).not.toBeInTheDocument()
+    expect(screen.queryByText(/points to target/)).not.toBeInTheDocument()
+  })
+
+  it('labels a completed scripted fallback even when microphone access was denied', () => {
+    render(<Scorecard {...baseProps} voiceMode="synthetic" error="Microphone denied" transcript={[{ t: '00:01', who: 'user', text: 'Sample line' }]} />)
+    expect(screen.getByText('Scripted sample · scores and conversation are illustrative')).toBeInTheDocument()
+    expect(screen.getByText('22')).toBeInTheDocument()
+  })
+
   it('renders the total score and grade derived from the score map', () => {
     render(<Scorecard {...baseProps} />)
     // 4+4+4+3+4+3 = 22

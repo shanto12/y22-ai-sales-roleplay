@@ -62,7 +62,7 @@ export default async (req) => {
           { role: 'system', content: sys },
           { role: 'user', content: userText },
         ],
-        response_format: { type: 'json_object' },
+        text: { format: { type: 'json_object' } },
       }),
     })
 

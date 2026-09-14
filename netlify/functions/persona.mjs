@@ -56,7 +56,7 @@ export default async (req) => {
               content: `Industry=${industry}; Buyer title=${title}; Difficulty=${difficulty}; Objection style=${objection}. Return JSON only.`,
             },
           ],
-          response_format: { type: 'json_object' },
+          text: { format: { type: 'json_object' } },
         }
 
         const r = await fetch(`${baseUrl}/responses`, {
